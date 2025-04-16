@@ -2,6 +2,97 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 **Comprehensive documentation and file structure:** See [DOC.md](./DOC.md)
 
+## Personal Website
+
+A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, Whisper) integrations.
+
+---
+
+## Features
+- Telegram webhook endpoint for automated messaging, file, and voice handling
+- Supabase Storage integration for file uploads
+- OpenAI GPT-4.1 for AI-powered responses
+- Whisper API for voice transcription
+- TypeScript, ESLint, Jest, Tailwind CSS
+
+## Security
+
+- Environment variables are used for all sensitive credentials (Supabase, OpenAI, Telegram, Whisper).
+- User data is never logged or exposed in client-side code.
+- Only approved domains and users can access the deployed endpoints.
+
+## Agent Swarm Architecture
+
+- This system is designed to be deployed as a swarm of agents, enabling scalable, collaborative, and distributed operation.
+- It leverages [autogen 0.2](https://github.com/microsoft/autogen) and [LangChain](https://github.com/langchain-ai/langchain) to orchestrate and manage multiple agents working in parallel or in coordination.
+- Each agent can be specialized for different tasks (e.g., Telegram handling, file management, voice transcription, etc.) and can communicate with other agents in the swarm.
+- This architecture supports robust, modular, and extensible deployments for advanced automation and AI-driven workflows.
+
+## Reliability & Crash Recovery
+
+- The system is designed to recover from crashes without losing state by using an external store for memory. This ensures that restarts do not wipe important context.
+- Periodic backups are implemented for any important data, including long-term conversation history or vector indexes, to prevent data loss.
+- If the agent crashes or an external API fails, the system either retries the operation or responds to the user with an apology, rather than going silent.
+
+## Setup
+
+### Prerequisites
+- Node.js 18+
+- npm
+- Supabase account and project
+- Telegram Bot Token
+- OpenAI API keys
+
+### Environment Variables
+Create a `.env` file with:
+```
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+OPENAI_API_KEY=your_openai_api_key
+WHISPER_API_KEY=your_whisper_api_key
+```
+
+### Install Dependencies
+```
+npm install
+```
+
+### Development
+```
+npm run dev
+```
+
+### Linting & Formatting
+```
+npx next lint --fix
+```
+
+### Testing
+```
+npm test
+```
+
+## Core Architecture
+- **pages/api/telegram.ts**: Main API route for Telegram webhook
+- **components/**: React components
+- **utils/**: Utility functions
+- **Supabase**: Used for storage and message history
+- **OpenAI**: Used for chat and voice transcription
+
+## Testing
+- Uses Jest and @testing-library/react
+- Add tests in `components/*.test.tsx` and for API logic
+- See PLAN.md for key regression and integration tests
+
+## Deployment
+- Deployable to Vercel, Netlify, or similar (see Next.js docs)
+
+---
+
+## License
+MIT
+
 ## Getting Started
 
 First, run the development server:

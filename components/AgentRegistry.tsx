@@ -22,6 +22,8 @@ export default function AgentRegistry() {
   };
 
   const [logs, setLogs] = useState<any[]>([]);
+  const [recoveryStatus, setRecoveryStatus] = useState<string|null>(null);
+  const [restarting, setRestarting] = useState(false);
 
   // Poll logs and health for the open modal agent every 2s
   const [health, setHealth] = useState<string>('pending');
@@ -51,6 +53,27 @@ export default function AgentRegistry() {
       clearInterval(interval);
     };
   }, [modalAgent]);
+
+  const handleRestart = async (agentId: string) => {
+    setRestarting(true);
+    setRecoveryStatus(null);
+    try {
+      const res = await fetch(`/api/agents/${agentId}restart`, { method: 'POST' });
+      const data = await res.json();
+      if (data.result === 'recovered') {
+        setRecoveryStatus('recovered');
+      } else if (data.result === 'recovery_failed') {
+        setRecoveryStatus('recovery_failed');
+      } else {
+        setRecoveryStatus('restarting');
+      }
+      setRefresh(r => r + 1); // Refresh agent list
+    } catch (err: any) {
+      setRecoveryStatus('recovery_failed');
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   const handleView = async (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
@@ -117,7 +140,10 @@ export default function AgentRegistry() {
                 <td>{agent.host}</td>
                 <td>
                   <button onClick={() => handleView(agent.id)} style={{marginRight: 8}}>View</button>
-                  <button onClick={() => handleStop(agent.id)} style={{color: 'red'}}>Stop</button>
+                  <button onClick={() => handleStop(agent.id)} style={{color: 'red', marginRight: 8}}>Stop</button>
+                  {agent.status === 'crashed' && (
+                    <button onClick={() => handleRestart(agent.id)} style={{color: '#a67c00', background: '#fffbe6', border: '1px solid #ffe58f'}}>Restart</button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -138,12 +164,18 @@ export default function AgentRegistry() {
                 minWidth: 70,
                 padding: '2px 10px',
                 borderRadius: 12,
-                background: health === 'healthy' ? '#d4f7d4' : health === 'crashed' ? '#ffd4d4' : '#ffe8b2',
-                color: health === 'healthy' ? '#1c7c1c' : health === 'crashed' ? '#b70000' : '#a67c00',
+                background: health === 'healthy' ? '#d4f7d4' : health === 'crashed' ? '#ffd4d4' : health === 'restarting' ? '#ffe8b2' : health === 'recovered' ? '#d2f4ff' : health === 'recovery_failed' ? '#ffcccc' : '#ffe8b2',
+                color: health === 'healthy' ? '#1c7c1c' : health === 'crashed' ? '#b70000' : health === 'restarting' ? '#a67c00' : health === 'recovered' ? '#005c99' : health === 'recovery_failed' ? '#b70000' : '#a67c00',
                 fontWeight: 600,
                 fontSize: 13,
                 textAlign: 'center',
               }}>{health.charAt(0).toUpperCase() + health.slice(1)}</span>
+              {health === 'crashed' && (
+                <button onClick={() => handleRestart(modalAgent!.id)} style={{marginLeft: 10, color: '#a67c00', background: '#fffbe6', border: '1px solid #ffe58f'}} disabled={restarting}>Restart</button>
+              )}
+              {restarting && <span style={{ marginLeft: 8, color: '#a67c00' }}>Restarting...</span>}
+              {recoveryStatus === 'recovered' && <span style={{ marginLeft: 8, color: '#005c99' }}>Recovered!</span>}
+              {recoveryStatus === 'recovery_failed' && <span style={{ marginLeft: 8, color: '#b70000' }}>Recovery Failed</span>}
             </div>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', background: '#f8f8f8', padding: 12, borderRadius: 4, fontSize: 13 }}>
               {JSON.stringify(modalAgent, null, 2)}

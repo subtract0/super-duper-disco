@@ -3,7 +3,7 @@
  * Simple in-memory agent health tracker. Future: Replace with real health checks and monitoring.
  */
 
-export type AgentHealthStatus = 'healthy' | 'unresponsive' | 'crashed' | 'pending';
+export type AgentHealthStatus = 'healthy' | 'unresponsive' | 'crashed' | 'pending' | 'restarting' | 'recovered' | 'recovery_failed';
 
 export class AgentHealthStore {
   private health: Record<string, AgentHealthStatus> = {};

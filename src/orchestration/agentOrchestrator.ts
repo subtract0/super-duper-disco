@@ -26,6 +26,10 @@ import { agentLogStore } from './agentLogs';
 import { agentHealthStore, AgentHealthStatus } from './agentHealth';
 
 export class AgentOrchestrator {
+  private recoveryAttempts: Record<string, number> = {};
+  private maxRecoveryAttempts = 3;
+  private recoveryCooldownMs = 2000; // 2 seconds for demo
+
   /**
    * In-memory list of orchestrated agents. In production, this should be backed by a DB or distributed store.
    */
@@ -68,6 +72,8 @@ export class AgentOrchestrator {
    * @param agentId The agent's unique ID
    */
   async stopAgent(agentId: string): Promise<void> {
+    this.recoveryAttempts[agentId] = 0;
+
     // Simulate stop (future: send kill signal, etc.)
     this.agents = this.agents.filter((a: OrchestratedAgent) => a.id !== agentId);
     // Remove from persistent store
@@ -87,6 +93,45 @@ export class AgentOrchestrator {
     agentHealthStore.setHealth(agentId, 'crashed');
   }
 
+
+  /**
+   * Restart an agent if crashed, with retry logic. Sets health to 'restarting' and then 'recovered' or 'recovery_failed'.
+   */
+  async restartAgent(agentId: string): Promise<'recovered' | 'recovery_failed'> {
+    const agent = this.getAgent(agentId);
+    if (!agent) return 'recovery_failed';
+    if (agentHealthStore.getHealth(agentId) !== 'crashed') return 'recovery_failed';
+    agentHealthStore.setHealth(agentId, 'restarting');
+    agentLogStore.addLog({
+      agentId,
+      timestamp: Date.now(),
+      level: 'info',
+      message: `Agent recovery/restart initiated`,
+    });
+    this.recoveryAttempts[agentId] = (this.recoveryAttempts[agentId] || 0) + 1;
+    // Simulate recovery delay
+    await new Promise(res => setTimeout(res, this.recoveryCooldownMs));
+    if (this.recoveryAttempts[agentId] <= this.maxRecoveryAttempts) {
+      agentHealthStore.setHealth(agentId, 'recovered');
+      agentLogStore.addLog({
+        agentId,
+        timestamp: Date.now(),
+        level: 'info',
+        message: `Agent successfully recovered (attempt ${this.recoveryAttempts[agentId]})`,
+      });
+      // Optionally, relaunch agent logic here
+      return 'recovered';
+    } else {
+      agentHealthStore.setHealth(agentId, 'recovery_failed');
+      agentLogStore.addLog({
+        agentId,
+        timestamp: Date.now(),
+        level: 'error',
+        message: `Agent recovery failed after ${this.recoveryAttempts[agentId]} attempts`,
+      });
+      return 'recovery_failed';
+    }
+  }
 
   /**
    * Get an agent by ID.

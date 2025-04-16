@@ -32,29 +32,31 @@ export default function AuthForm() {
   };
 
   return (
-    <form className="flex flex-col gap-4 w-full max-w-xs mx-auto mt-10">
-      <h2 className="text-xl font-bold">Login or Register</h2>
+    <form className="bg-white/10 backdrop-blur-md shadow-xl rounded-2xl px-8 py-8 flex flex-col gap-6 w-full max-w-md mx-auto border border-white/10">
+      <h2 className="text-2xl font-bold text-white mb-2">Login or Register</h2>
       <input
         type="email"
         placeholder="Email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        className="border rounded p-2"
+        className="border border-neutral-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white/80 text-black rounded-lg px-4 py-3 outline-none transition placeholder:text-neutral-400"
         required
+        autoComplete="email"
       />
       <input
         type="password"
         placeholder="Password"
         value={password}
         onChange={e => setPassword(e.target.value)}
-        className="border rounded p-2"
+        className="border border-neutral-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-white/80 text-black rounded-lg px-4 py-3 outline-none transition placeholder:text-neutral-400"
         required
+        autoComplete="current-password"
       />
-      <div className="flex gap-2">
+      <div className="flex gap-4 mt-2">
         <button
           type="submit"
           onClick={handleSignIn}
-          className="bg-black text-white px-4 py-2 rounded hover:bg-neutral-800 transition flex-1"
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold transition flex-1 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading}
         >
           Sign In
@@ -62,14 +64,14 @@ export default function AuthForm() {
         <button
           type="button"
           onClick={handleSignUp}
-          className="bg-gray-300 text-black px-4 py-2 rounded hover:bg-gray-400 transition flex-1"
+          className="bg-white/80 hover:bg-blue-50 text-blue-700 px-4 py-2 rounded-lg font-semibold transition flex-1 shadow-md border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
           disabled={loading}
         >
           Register
         </button>
       </div>
-      {error && <div className="text-red-500">{error}</div>}
-      {success && <div className="text-green-600">{success}</div>}
+      {error && <div className="text-red-400 text-center font-medium mt-2">{error}</div>}
+      {success && <div className="text-green-400 text-center font-medium mt-2">{success}</div>}
     </form>
   );
 }

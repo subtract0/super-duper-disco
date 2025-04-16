@@ -40,6 +40,28 @@ HandwerkerPro is a modern, production-ready Next.js application for managing cra
 
 ---
 
+## Agent Lifecycle, Health States & UI Notifications
+
+### Agent Lifecycle
+- Agents are launched, stopped, and can be automatically or manually restarted by the orchestrator.
+- On crash, the orchestrator marks the agent as `crashed` and attempts auto-recovery with retries and cooldowns.
+- Agents remain in the registry with their current status for full visibility and recovery.
+
+### Health States
+- `pending`: Agent is initializing
+- `healthy`: Agent is running normally
+- `crashed`: Agent has stopped unexpectedly
+- `restarting`: Agent is in the process of being recovered
+- `recovered`: Agent was successfully restarted
+- `recovery_failed`: All recovery attempts failed
+
+### UI Notifications
+- The Agent Registry UI displays toast notifications when an agent is auto-recovered, restarted, or recovery fails.
+- Toasts are color-coded (success/info/error) and auto-dismiss after a few seconds.
+- The UI reflects all health states for maximum transparency and user trust.
+
+---
+
 ## Key Technologies
 - **Next.js 15**: App router, SSR, API routes
 - **Supabase**: Auth, multi-tenancy, email templates

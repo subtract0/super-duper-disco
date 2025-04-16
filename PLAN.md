@@ -49,15 +49,28 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
   - User receives a helpful error message via Telegram
   - Test passes for both Supabase and OpenAI failures
 - **Recommended Approach:**
-  - Integration tests with forced errors and assertion on user notification
+  - Integration tests with forced errors and assertion on user notification (**in progress**)
+
+---
+
+### ✅ Agent Restart/Recovery Logic & UI Notification (COMPLETED)
+- **Objective:** Implement agent restart/recovery logic and display recovery status in the UI, including user notification via toast.
+- **Acceptance Criteria:**
+  - Agents can be manually and automatically recovered after crash
+  - UI displays recovery status and notifies user of recovery events
+  - All code and tests updated for persistent crashed agents
+  - Type safety for all health states
+  - Toast notifications for recovery events (success, info, error)
+- **Status:** Completed and committed (see git log for details)
 
 ### 6. Documentation and Architecture Ticket
 - **Objective:** Keep documentation (README.md, DOC.md, PLAN.md) in sync with code and architecture changes.
 - **Acceptance Criteria:**
-  - All docs are up-to-date after major changes
+  - All docs are up-to-date after major changes, including agent recovery and notification logic
   - PLAN.md reflects new tickets and completed work
 - **Recommended Approach:**
   - Add/update docs as part of PR acceptance checklist
+  - Document agent lifecycle, health states, and notification flow
 
 ### 7. Swarm Agent Orchestration (Autogen & LangChain)
 - **Objective:** Integrate autogen 0.2 and LangChain to orchestrate and manage multiple agents.

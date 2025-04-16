@@ -28,9 +28,13 @@ A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, W
 - Each agent can be specialized for different tasks (e.g., Telegram handling, file management, voice transcription, etc.) and can communicate with other agents in the swarm.
 - This architecture supports robust, modular, and extensible deployments for advanced automation and AI-driven workflows.
 
-## Reliability & Crash Recovery
+## Reliability, Crash Recovery & User Notifications
 
 - The system is designed to recover from crashes without losing state by using an external store for memory. This ensures that restarts do not wipe important context.
+- Agents feature **automatic and manual recovery**: if an agent crashes, the orchestrator attempts auto-restart (with retries and cooldowns). Recovery status is tracked and exposed in the UI.
+- **Health states** include: `healthy`, `pending`, `crashed`, `restarting`, `recovered`, and `recovery_failed` for robust orchestration and monitoring.
+- **UI notifications:** When an agent recovers, restarts, or recovery fails, a toast notification is shown to the user (color-coded for success/info/error). This provides instant, visible feedback on agent health.
+- All agent status and notifications are type-safe and reflected in the UI and API responses.
 - Periodic backups are implemented for any important data, including long-term conversation history or vector indexes, to prevent data loss.
 - If the agent crashes or an external API fails, the system either retries the operation or responds to the user with an apology, rather than going silent.
 

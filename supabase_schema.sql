@@ -38,3 +38,28 @@ create policy "Anyone can create a company" on companies
 -- Insert policy for profile creation
 create policy "Anyone can create a profile" on profiles
   for insert using (true);
+
+-- 5. Messages table for comms-agent (text, images, voice (transcription), documents <25MB)
+create table if not exists messages (
+    id uuid primary key default uuid_generate_v4(),
+    user_id text not null,
+    message_type text not null,      -- 'text', 'image', 'voice', 'document'
+    content text,                    -- text, transcription, or file URL
+    file_name text,                  -- original file name (if applicable)
+    file_size bigint,                -- file size in bytes (if applicable)
+    mime_type text,                  -- MIME type (if applicable)
+    telegram_message_id bigint,      -- optional: for referencing the original Telegram message
+    created_at timestamptz default now(),
+    role text not null               -- 'user' or 'agent'
+);
+
+-- Enable RLS for messages
+alter table messages enable row level security;
+
+-- Only allow users to see their own messages
+create policy "Users can view their own messages" on messages
+  for select using (user_id = auth.uid());
+
+-- Only allow users to insert their own messages
+create policy "Users can insert their own messages" on messages
+  for insert using (user_id = auth.uid());

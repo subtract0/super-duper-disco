@@ -18,7 +18,9 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-query": "^5.74.3",
+    "axios": "^1.8.4",
     "clsx": "^2.1.1",
+    "form-data": "^4.0.2",
     "next": "15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
@@ -29,6 +31,8 @@
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^14.2.1",
     "@testing-library/user-event": "^14.5.2",
+    "@types/axios": "^0.9.36",
+    "@types/form-data": "^2.2.1",
     "@types/jest": "^29.5.12",
     "@types/node": "^20",
     "@types/react": "^19",

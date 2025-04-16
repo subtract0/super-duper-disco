@@ -98,12 +98,65 @@ export default function AgentRegistry() {
   // State for manual refresh (used for agent list reloads)
   const [refresh, setRefresh] = useState<number>(0);
 
+  // --- Toast Notification State ---
+  const [toasts, setToasts] = useState<{id: string, message: string, type: 'success' | 'info' | 'error'}[]>([]);
+  // Track previous health for all agents
+  const prevHealthRef = React.useRef<Record<string, string>>({});
+  useEffect(() => {
+    // On agents update, compare health and show toast if changed to recovery states
+    agents.forEach(agent => {
+      const prev = prevHealthRef.current[agent.id];
+      if (agent.status !== prev && ['recovered', 'restarting', 'recovery_failed'].includes(agent.status)) {
+        let message = '';
+        let type: 'success' | 'info' | 'error' = 'info';
+        if (agent.status === 'recovered') {
+          message = `Agent ${agent.id} recovered successfully`;
+          type = 'success';
+        } else if (agent.status === 'restarting') {
+          message = `Agent ${agent.id} is restarting...`;
+          type = 'info';
+        } else if (agent.status === 'recovery_failed') {
+          message = `Agent ${agent.id} recovery failed`;
+          type = 'error';
+        }
+        setToasts(ts => [...ts, { id: agent.id + '-' + agent.status + '-' + Date.now(), message, type }]);
+      }
+      prevHealthRef.current[agent.id] = agent.status;
+    });
+  }, [agents]);
+
+  // Auto-dismiss toasts after 4s
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const timer = setTimeout(() => {
+      setToasts(ts => ts.slice(1));
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [toasts]);
+
   useEffect(() => {
     fetchAgents();
   }, [refresh]);
 
   return (
     <div style={{ padding: 16 }}>
+      {/* Toast Container */}
+      <div style={{ position: 'fixed', top: 20, right: 20, zIndex: 2000 }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{
+            marginBottom: 10,
+            padding: '10px 18px',
+            borderRadius: 8,
+            minWidth: 220,
+            color: t.type === 'error' ? '#b70000' : t.type === 'success' ? '#1c7c1c' : '#a67c00',
+            background: t.type === 'error' ? '#ffd4d4' : t.type === 'success' ? '#d4f7d4' : '#fffbe6',
+            border: t.type === 'error' ? '1px solid #ffaaaa' : t.type === 'success' ? '1px solid #b2e6b2' : '1px solid #ffe58f',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+            fontWeight: 500,
+            fontSize: 15
+          }}>{t.message}</div>
+        ))}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <h2 style={{ margin: 0 }}>Agent Registry</h2>
         <button

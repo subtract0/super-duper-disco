@@ -1,7 +1,7 @@
 export interface Agent {
   id: string;
   type: string;
-  status: "healthy" | "pending" | "crashed";
+  status: "healthy" | "pending" | "crashed" | "restarting" | "recovered" | "recovery_failed";
   host: string;
   config: Record<string, any>;
 }

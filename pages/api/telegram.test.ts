@@ -130,4 +130,59 @@ describe('Telegram API Handler', () => {
     expect((axios.post as jest.Mock).mock.calls[0][0]).toContain('/audio/transcriptions');
     expect((axios.post as jest.Mock).mock.calls[1][0]).toContain('/v1/chat/completions');
   });
-});
+
+  it('returns error and notifies user if Supabase insert fails', async () => {
+    // Patch Supabase insert to fail
+    (handler as any).supabase = {
+      from: () => ({
+        insert: () => Promise.resolve({ error: { message: 'Supabase down' } }),
+        select: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: [], error: null }) }) }) })
+      }),
+      storage: { from: () => ({ upload: () => Promise.resolve({ data: { path: 'mock.png' }, error: null }) }) },
+    };
+    // Mock OpenAI response
+    mockOpenAIResponse('Should not be called');
+    // Mock Telegram message sending
+    (axios.post as jest.Mock).mockResolvedValueOnce({ data: {} });
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 1 }, from: { id: 2 }, message_id: 6, text: 'Trigger error' } },
+    });
+    await handler(req, res, (handler as any).supabase);
+    expect(res._getStatusCode()).toBe(200);
+    const response = JSON.parse(res._getData());
+    expect(response.ok).toBe(false);
+    expect(response.error).toMatch(/Supabase down/);
+    // Should notify user via Telegram
+    expect((axios.post as jest.Mock).mock.calls[0][0]).toContain('/sendMessage');
+    expect((axios.post as jest.Mock).mock.calls[0][1].chat_id).toBe(1);
+    expect((axios.post as jest.Mock).mock.calls[0][1].text).toMatch(/Supabase down/);
+  });
+
+  it('returns error and notifies user if OpenAI API fails', async () => {
+    // Patch Supabase to succeed
+    (handler as any).supabase = {
+      from: () => ({
+        insert: () => Promise.resolve({ error: null }),
+        select: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: [], error: null }) }) }) })
+      }),
+      storage: { from: () => ({ upload: () => Promise.resolve({ data: { path: 'mock.png' }, error: null }) }) },
+    };
+    // Mock OpenAI API to fail
+    (axios.post as jest.Mock).mockImplementationOnce(() => Promise.reject(new Error('OpenAI down')));
+    // Mock Telegram message sending
+    (axios.post as jest.Mock).mockResolvedValueOnce({ data: {} });
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 1 }, from: { id: 2 }, message_id: 7, text: 'Trigger OpenAI error' } },
+    });
+    await handler(req, res, (handler as any).supabase);
+    expect(res._getStatusCode()).toBe(200);
+    const response = JSON.parse(res._getData());
+    expect(response.ok).toBe(false);
+    expect(response.error).toMatch(/OpenAI down/);
+    // Should notify user via Telegram
+    expect((axios.post as jest.Mock).mock.calls[0][0]).toContain('/sendMessage');
+    expect((axios.post as jest.Mock).mock.calls[0][1].chat_id).toBe(1);
+    expect((axios.post as jest.Mock).mock.calls[0][1].text).toMatch(/OpenAI down/);
+  });

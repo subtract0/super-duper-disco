@@ -62,9 +62,67 @@ HandwerkerPro is a modern, production-ready Next.js application for managing cra
 - `recovered`: Agent was successfully restarted
 - `recovery_failed`: All recovery attempts failed
 
+### Agent Log Format
+Agent logs are structured as objects with the following fields:
+
+```ts
+{
+  agentId: string;         // Unique agent ID
+  timestamp: number;       // Unix timestamp (ms)
+  level: 'info' | 'warn' | 'error';
+  message: string;         // Log message
+}
+```
+
+**Example:**
+```json
+{
+  "agentId": "f9679359-b7c0-465d-aace-2efa58bc7d02",
+  "timestamp": 1713380000000,
+  "level": "info",
+  "message": "Agent launched (type: test, host: localhost)"
+}
+```
+
+### API Error Response Format
+All agent API endpoints return errors in a consistent JSON format with the appropriate HTTP status code. Typical error responses:
+
+- **400 Bad Request** (e.g., invalid agent ID):
+  ```json
+  { "error": "Invalid agent id (must be string)" }
+  ```
+- **404 Not Found** (e.g., agent not found):
+  ```json
+  { "error": "Agent not found" }
+  ```
+- **405 Method Not Allowed**:
+  ```json
+  { "error": "Method not allowed" }
+  ```
+
+Clients and tests should always check for an `error` field in non-200 responses.
+
 ### UI Notifications
 - The Agent Registry UI displays toast notifications when an agent is auto-recovered, restarted, or recovery fails.
 - Toasts are color-coded (success/info/error) and auto-dismiss after a few seconds.
+
+---
+
+## Dashboard UI: Real-Time Agent State
+
+The dashboard provides:
+- **Health status color-coding:**
+    - healthy (green), recovered (blue), pending (orange), restarting (purple), crashed (red), recovery_failed (dark red), unresponsive (yellow)
+- **Log level color-coding:**
+    - info (blue), warning (orange), error (red), debug (green)
+- **Toast notifications:**
+    - Shown for agent lifecycle events and errors, color-coded by event type
+- **Real-time polling:**
+    - Health and logs are refreshed every 2s for live feedback
+- **Troubleshooting:**
+    - Refresh the page if UI is stale
+    - Check browser console and API server status for persistent errors
+    - All errors are surfaced in the UI as toasts or messages
 - The UI reflects all health states for maximum transparency and user trust.
 
 ---
@@ -91,6 +149,11 @@ HandwerkerPro is a modern, production-ready Next.js application for managing cra
 - Run all tests: `npm test`
 - Test files are in `components/` and `utils/`
 - Jest and Testing Library are configured for React 19/Next.js
+
+## Troubleshooting (Windows/Next.js)
+- **Path issues:** Use correct relative import paths (e.g., `../../../src/...`). Avoid brackets/special characters in test file/folder names.
+- **Port conflicts:** If you see errors like `Port 3000 is in use`, kill all Node/Next.js processes. Use Task Manager or `Get-Process node | Stop-Process` in PowerShell.
+- **Jest test discovery:** Test files must be named `*.test.ts` and not nested in problematic folders.
 
 ---
 

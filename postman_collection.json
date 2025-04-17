@@ -1,0 +1,111 @@
+{
+  "info": {
+    "_postman_id": "a1e2b3c4-d5f6-7890-abcd-ef1234567890",
+    "name": "Agent API Collection",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get All Agents",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents"]
+        }
+      }
+    },
+    {
+      "name": "Create Agent",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"test\",\n  \"host\": \"localhost\",\n  \"config\": {}\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/agents",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents"]
+        }
+      }
+    },
+    {
+      "name": "Get Agent By ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents/:id",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents", ":id"]
+        }
+      }
+    },
+    {
+      "name": "Delete Agent By ID",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents/:id",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents", ":id"]
+        }
+      }
+    },
+    {
+      "name": "Get Agent Logs",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents/:id/logs",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents", ":id", "logs"]
+        }
+      }
+    },
+    {
+      "name": "Restart Agent",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents/:id/restart",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents", ":id", "restart"]
+        }
+      }
+    },
+    {
+      "name": "Get Agent Health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/agents/:id/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "agents", ":id", "health"]
+        }
+      }
+    }
+  ]
+}

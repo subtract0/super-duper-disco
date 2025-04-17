@@ -53,6 +53,172 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
 
 ---
 
+### Current Tasks
+
+---
+
+## Planned Modularization: Telegram API Handler
+
+---
+
+## Appendix: Agent Broker & Swarm Roadmap
+
+### Ticket 1: Add Navigation and UX Polish
+- **Objective:** Ensure seamless, intuitive navigation between all major app areas.
+- **Acceptance Criteria:**
+  - Navigation bar or persistent header/footer across all pages
+  - Clear "Home" and "Agent Swarm Dashboard" links
+  - Keyboard navigation and accessibility (ARIA roles, focus states)
+- **Recommended Approach:**
+  - Implement responsive navigation with accessibility best practices
+  - Add breadcrumbs for multi-step flows
+
+### Ticket 2: Card Art Customization & Upgrade
+- **Objective:** Replace placeholder card art with dynamic, visually appealing images.
+- **Acceptance Criteria:**
+  - Each card displays unique, relevant art (AI-generated or curated)
+  - High contrast and alt text for accessibility
+- **Recommended Approach:**
+  - Integrate with DALL-E, Stable Diffusion, or Unsplash API
+  - Allow users to upload their own card art
+  - Fallback to a default image if loading fails
+
+### Ticket 3: Agent Idea Generation via LLM
+- **Objective:** Make agent idea generation creative, context-aware, and delightful.
+- **Acceptance Criteria:**
+  - Card ideas are novel, relevant, and non-repetitive
+  - Personalization: ideas reflect user history/preferences
+- **Recommended Approach:**
+  - Use OpenAI or similar for idea generation
+  - Cache/deduplicate ideas
+  - Add user feedback on idea quality (like/dislike)
+
+### Ticket 4: Agent Card Details Modal
+- **Objective:** Let users preview and configure agent details before deployment.
+- **Acceptance Criteria:**
+  - Modal/dialog shows agent details, config, and preview art
+  - Keyboard accessible and screen reader friendly
+- **Recommended Approach:**
+  - Add modal to AgentBrokerCardDeck
+  - Support inline config editing with validation
+
+### Ticket 5: Agent Deployment Feedback & History
+- **Objective:** Give users instant, clear feedback and a sense of progress.
+- **Acceptance Criteria:**
+  - Toasts/banners for deployment success/failure
+  - Accessible status updates (ARIA live regions)
+  - Deployment history with filtering/search
+- **Recommended Approach:**
+  - Integrate toast notifications
+  - Add a timeline/history section to the dashboard
+
+### Ticket 6: Agent Broker Gamification
+- **Objective:** Add delight and replay value with gamified mechanics.
+- **Acceptance Criteria:**
+  - Cards display rarity, special effects, or unlockable skins
+  - Achievements, streaks, and daily rewards
+- **Recommended Approach:**
+  - Extend card data with rarity, effects, unlocks
+  - Track user actions and display badges/achievements
+  - Add celebratory animations (confetti, sound cues)
+
+### Ticket 7: Agent Broker API Security & Rate Limiting
+- **Objective:** Protect endpoints and ensure fair, safe usage.
+- **Acceptance Criteria:**
+  - API rate limits per user/IP
+  - Sensitive actions require authentication
+  - Security tested for abuse vectors
+- **Recommended Approach:**
+  - Use middleware for rate limiting and auth
+  - Add automated security tests
+
+### Ticket 8: End-to-End Tests for Broker Flow
+- **Objective:** Guarantee reliability and confidence in the user journey.
+- **Acceptance Criteria:**
+  - E2E tests cover all major flows (idea → card → deploy → feedback)
+  - Accessibility checks in tests
+- **Recommended Approach:**
+  - Use Cypress/Playwright for UI tests
+  - Mock backend APIs and simulate errors
+
+### Ticket 9: Multi-Agent Orchestration & Swarm Modes
+- **Objective:** Enable advanced, collaborative agent scenarios.
+- **Acceptance Criteria:**
+  - Deploy/manage multiple agents as a "swarm"
+  - Swarm visualization and control panel
+  - Configurable collaborative/competitive modes
+- **Recommended Approach:**
+  - Extend AgentOrchestrator for multi-agent logic
+  - Add UI for swarm management/visualization
+
+### Ticket 10: Documentation & Demo Walkthrough
+- **Objective:** Make onboarding and learning delightful and easy.
+- **Acceptance Criteria:**
+  - Docs with diagrams, screenshots, and video walkthroughs
+  - Interactive onboarding tour for new users
+- **Recommended Approach:**
+  - Add markdown docs and diagrams
+  - Implement a guided tour/onboarding modal in UI
+
+### Ticket 11: User Onboarding & First-Time Experience
+- **Objective:** Welcome new users and guide them through first actions.
+- **Acceptance Criteria:**
+  - Friendly welcome screen and step-by-step intro
+  - Tooltips for key features
+- **Recommended Approach:**
+  - Add onboarding modal or tour
+  - Highlight important actions with contextual tips
+
+### Ticket 12: Accessibility & Inclusivity Audit
+- **Objective:** Ensure the app is usable by everyone, regardless of ability.
+- **Acceptance Criteria:**
+  - All interactive elements are keyboard accessible
+  - Sufficient color contrast, alt text, and ARIA labels
+  - Tested with screen readers
+- **Recommended Approach:**
+  - Run accessibility audits (axe, Lighthouse)
+  - Address all critical issues and document improvements
+
+### Ticket 13: Advanced Agent Customization
+- **Objective:** Let users deeply personalize deployed agents.
+- **Acceptance Criteria:**
+  - UI for editing agent name, avatar, and behavior
+  - Save/load agent templates
+- **Recommended Approach:**
+  - Add agent config editor modal
+  - Allow export/import of agent configs
+
+### Ticket 14: Visual Theme Selector & Dark Mode
+- **Objective:** Let users choose visual themes for greater appeal.
+- **Acceptance Criteria:**
+  - Toggle between light/dark/system themes
+  - Option to select card deck styles (e.g., fantasy, sci-fi)
+- **Recommended Approach:**
+  - Integrate theme switcher in navigation
+  - Store user preference in local storage
+
+### Ticket 15: Community & Sharing Features
+- **Objective:** Foster community and sharing of agent ideas/configs.
+- **Acceptance Criteria:**
+  - Users can share agent cards/configs via link or QR code
+  - Option to browse popular/shared agents
+- **Recommended Approach:**
+  - Implement share/export feature for agents
+  - Add public gallery of community agents
+
+---
+
+- `pages/api/telegram.ts` is approaching 200 lines and contains multiple responsibilities (file handling, transcription, OpenAI calls, DB operations, etc.).
+- To maintain codebase cleanliness and follow project rules, plan to:
+  - Extract file handling (Telegram file download, Supabase upload) into `utils/telegram/file.ts`.
+  - Extract transcription logic (Whisper API) into `utils/telegram/transcription.ts`.
+  - Extract OpenAI interaction into `utils/telegram/openai.ts`.
+  - Extract Supabase message operations into `utils/telegram/db.ts`.
+- The API handler will then focus on request routing and orchestration, staying under 200 lines and easier to test and maintain.
+- This modularization will not affect dev/prod environments, only code organization.
+
+---
+
 ### ✅ Agent Restart/Recovery Logic & UI Notification (COMPLETED)
 - **Objective:** Implement agent restart/recovery logic and display recovery status in the UI, including user notification via toast.
 - **Acceptance Criteria:**
@@ -149,6 +315,8 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
 - **Acceptance Criteria:**
   - Docs cover architecture, setup, agent registration, deployment, and monitoring.
   - Example configs for local, remote, and cloud deployment.
+  - Agent health states and log format are fully documented in DOC.md.
+  - Troubleshooting for Windows/Next.js (path, port, Jest issues) is now included in DOC.md and README.md.
   - Tutorials for both technical and non-technical users.
 - **Recommended Approach:**
   - Update README, DOC.md, and add example config files.

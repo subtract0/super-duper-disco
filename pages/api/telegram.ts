@@ -35,8 +35,8 @@ async function downloadTelegramFile(file_id: string): Promise<{ buffer: Buffer, 
   };
 }
 // Helper: Upload file to Supabase Storage
-async function uploadToSupabaseStorage(buffer: Buffer, file_name: string, mime_type: string) {
-  const { data, error } = await supabase.storage.from('messages').upload(file_name, buffer, {
+async function uploadToSupabaseStorage(buffer: Buffer, file_name: string, mime_type: string, supabaseClient = supabase) {
+  const { data, error } = await supabaseClient.storage.from('messages').upload(file_name, buffer, {
     contentType: mime_type,
     upsert: true,
   });
@@ -95,7 +95,7 @@ async function callOpenAIGPT(messages: Message[]): Promise<string> {
   return response.data.choices[0].message.content.trim();
 }
 // Main handler
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse, supabaseClient = supabase) {
   if (req.method !== 'POST') return res.status(405).end();
   let body = req.body;
   if (typeof body === 'string') {
@@ -112,7 +112,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[DEBUG] Incoming message:', JSON.stringify(message));
     if (!message) return res.status(200).json({ ok: false, error: 'No message in update' });
     if (!message.from || !message.chat) {
-      throw new Error('Missing sender or chat information (message.from or message.chat)');
+      return res.status(200).json({ ok: false, error: 'Missing sender or chat information (message.from or message.chat)' });
     }
     const chat_id = message.chat.id;
     const user_id = String(message.from.id);
@@ -138,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const file_id = photo.file_id;
       const file = await downloadTelegramFile(file_id);
       if (file.file_size > 25 * 1024 * 1024) throw new Error('File too large');
-      const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type);
+      const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type, supabaseClient);
       content = url ?? '';
       file_name = file.file_name ?? '';
       file_size = file.file_size;
@@ -151,7 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const file_id = doc.file_id;
       const file = await downloadTelegramFile(file_id);
       if (file.file_size > 25 * 1024 * 1024) throw new Error('File too large');
-      const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type);
+      const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type, supabaseClient);
       content = url ?? '';
       file_name = file.file_name ?? '';
       file_size = file.file_size;
@@ -176,8 +176,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await sendTelegramMessage(chat_id, 'Unsupported message type. Only text, images, voice, and files under 25MB are supported.');
       return res.status(200).json({ ok: true });
     }
+    // Debug: Log all message fields before insert
+    console.log('[DEBUG] Insert fields:', { user_id, message_type, content, file_name, file_size, mime_type, telegram_message_id, role: 'user' });
     // Save message to Supabase
-    const { error: insertError } = await supabase.from('messages').insert([
+    const { error: insertError } = await supabaseClient.from('messages').insert([
       {
         user_id,
         message_type,
@@ -192,7 +194,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (insertError) console.error('[Supabase] Insert error:', insertError);
 
     // Fetch conversation history (last 10 messages)
-    const { data: history, error: historyError } = await supabase
+    const { data: history, error: historyError } = await supabaseClient
       .from('messages')
       .select('*')
       .eq('user_id', user_id)

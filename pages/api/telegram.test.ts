@@ -1,9 +1,24 @@
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+process.env.TELEGRAM_BOT_TOKEN = 'dummy-bot-token';
+process.env.OPENAI_API_KEY = 'dummy-openai-key';
+process.env.WHISPER_API_KEY = 'dummy-whisper-key';
+
 import { createMocks } from 'node-mocks-http';
-import handler from './telegram';
 import * as supabase from '@supabase/supabase-js';
 import axios from 'axios';
 
 jest.mock('@supabase/supabase-js');
+
+import handler from './telegram';
+(handler as any).supabase = {
+  from: () => ({
+    insert: () => Promise.resolve({ error: null }),
+    select: () => ({ eq: () => ({ order: () => ({ limit: () => ({ data: [], error: null }) }) }) })
+  }),
+  storage: { from: () => ({ upload: () => Promise.resolve({ data: { path: 'mock.png' }, error: null }) }) },
+};
+
 jest.mock('axios');
 
 // Helper to mock OpenAI response
@@ -36,7 +51,7 @@ describe('Telegram API Handler', () => {
       method: 'POST',
       body: { message: { chat: { id: 1 }, from: { id: 2 }, message_id: 3, text: 'Hi' } },
     });
-    await handler(req, res);
+    await handler(req, res, (handler as any).supabase);
     expect(res._getStatusCode()).toBe(200);
     const response = JSON.parse(res._getData());
     console.log('Full response:', response);

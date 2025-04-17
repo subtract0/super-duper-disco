@@ -28,6 +28,14 @@ A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, W
 - Each agent can be specialized for different tasks (e.g., Telegram handling, file management, voice transcription, etc.) and can communicate with other agents in the swarm.
 - This architecture supports robust, modular, and extensible deployments for advanced automation and AI-driven workflows.
 
+## Multi-Agent Orchestration & Messaging
+
+- The orchestrator supports launching, monitoring, and coordinating multiple agents (the "swarm") via the `spawnSwarm` method.
+- Agents can send messages to each other using the `sendAgentMessage` and `getAgentMessages` APIs, enabling agent-to-agent communication and coordination.
+- The full swarm state (agents and messages) can be inspected for debugging, monitoring, or visualization.
+- All interfaces are type-safe and ready for extension with real distributed runtimes, autogen, or LangChain.
+- Extension points for autogen/LangChain are clearly marked in the codebase for future integration.
+
 ## Reliability, Crash Recovery & User Notifications
 
 - The system is designed to recover from crashes without losing state by using an external store for memory. This ensures that restarts do not wipe important context.

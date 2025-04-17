@@ -33,38 +33,61 @@ function randomCardArt(): { image: string; alt: string } {
   return { image: pick, alt: path.basename(pick, path.extname(pick)).replace(/[-_]/g, ' ') + ' art' };
 }
 
-function randomAgentIdeas(n: number = 3): AgentIdeaCard[] {
-  // Simple static pool for now, can be upgraded to GPT/DALL-E later
-  const ideas = [
-    {
-      name: 'Summarizer',
-      description: 'Summarizes long documents or chats.',
-      config: { type: 'summarizer' },
-    },
-    {
-      name: 'Sentiment Analyzer',
-      description: 'Detects sentiment in messages.',
-      config: { type: 'sentiment' },
-    },
-    {
-      name: 'Task Tracker',
-      description: 'Tracks and reminds you of tasks.',
-      config: { type: 'task-tracker' },
-    },
-    {
-      name: 'Translator',
-      description: 'Translates between languages.',
-      config: { type: 'translator' },
-    },
-    {
-      name: 'Joke Bot',
-      description: 'Tells a new joke every day.',
-      config: { type: 'jokebot' },
-    },
-  ];
-  // Shuffle and pick n
+import axios from 'axios';
+
+const staticIdeas = [
+  { name: 'Summarizer', description: 'Summarizes long documents or chats.', config: { type: 'summarizer' } },
+  { name: 'Sentiment Analyzer', description: 'Detects sentiment in messages.', config: { type: 'sentiment' } },
+  { name: 'Task Tracker', description: 'Tracks and reminds you of tasks.', config: { type: 'task-tracker' } },
+  { name: 'Translator', description: 'Translates between languages.', config: { type: 'translator' } },
+  { name: 'Joke Bot', description: 'Tells a new joke every day.', config: { type: 'jokebot' } },
+];
+
+let cachedIdeas: AgentIdeaCard[] | null = null;
+
+async function fetchAgentIdeasFromLLM(n: number = 3): Promise<AgentIdeaCard[]> {
+  try {
+    const prompt = `Generate ${n} creative, useful, and novel agent ideas for a software agent platform. For each, provide a catchy name, a one-sentence description, and a unique agent type string. Format as JSON array: [{ name, description, type }].`;
+    const resp = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.9,
+        max_tokens: 400,
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      },
+    );
+    const data: any = resp.data;
+    const content = data.choices[0].message.content;
+    const parsed = JSON.parse(content);
+    return parsed.map((idea: any) => ({
+      id: uuidv4(),
+      name: idea.name,
+      description: idea.description,
+      ...randomCardArt(),
+      config: { type: idea.type },
+    }));
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function smartAgentIdeas(n: number = 3): Promise<AgentIdeaCard[]> {
+  if (cachedIdeas) return cachedIdeas;
+  const llmIdeas = await fetchAgentIdeasFromLLM(n);
+  if (llmIdeas.length > 0) {
+    cachedIdeas = llmIdeas;
+    return llmIdeas;
+  }
+  // fallback
   return Array.from({ length: n }, (_, i) => {
-    const idea = ideas[Math.floor(Math.random() * ideas.length)];
+    const idea = staticIdeas[Math.floor(Math.random() * staticIdeas.length)];
     return {
       id: uuidv4(),
       name: idea.name,
@@ -75,14 +98,21 @@ function randomAgentIdeas(n: number = 3): AgentIdeaCard[] {
   });
 }
 
+// Stub: feedback loop for user like/dislike (to be implemented in UI)
+export function submitIdeaFeedback(cardId: string, feedback: 'like' | 'dislike') {
+  // TODO: store feedback for future personalization
+  return true;
+}
+
+
 export class AgentBroker {
   orchestrator: AgentOrchestrator;
   constructor(orchestrator: AgentOrchestrator) {
     this.orchestrator = orchestrator;
   }
 
-  suggestIdeas(n: number = 3): AgentIdeaCard[] {
-    return randomAgentIdeas(n);
+  async suggestIdeas(n: number = 3): Promise<AgentIdeaCard[]> {
+    return smartAgentIdeas(n);
   }
 
   async deployIdea(card: AgentIdeaCard, host: string = 'default'): Promise<OrchestratedAgent> {

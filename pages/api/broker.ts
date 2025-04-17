@@ -11,7 +11,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method === 'GET') {
     // Suggest 2-3 agent ideas as cards
     const n = Math.max(2, Math.min(3, Number(req.query.n) || 3));
-    const ideas = broker.suggestIdeas(n);
+    const ideas = await broker.suggestIdeas(n);
     res.status(200).json({ cards: ideas });
     return;
   }

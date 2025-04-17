@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import AgentCardDetailsModal from "./AgentCardDetailsModal";
 
 export type AgentIdeaCard = {
   id: string;
@@ -15,24 +16,42 @@ interface Props {
 }
 
 export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Props) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<AgentIdeaCard | null>(null);
+
+  const handleCardClick = (card: AgentIdeaCard) => {
+    if (loadingId) return;
+    setSelectedCard(card);
+    setModalOpen(true);
+  };
+  const handleClose = () => {
+    setModalOpen(false);
+    setSelectedCard(null);
+  };
+  const handleDeploy = (card: AgentIdeaCard) => {
+    setModalOpen(false);
+    onSelect(card);
+  };
+
   return (
-    <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 32 }}>
-      {cards.map(card => (
-        <div
-          key={card.id}
-          style={{
-            width: 220,
-            border: '2px solid #333',
-            borderRadius: 16,
-            background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            cursor: loadingId ? 'not-allowed' : 'pointer',
-            opacity: loadingId === card.id ? 0.5 : 1,
-            transition: 'opacity 0.2s',
-            position: 'relative',
-          }}
-          onClick={() => !loadingId && onSelect(card)}
-        >
+    <>
+      <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 32 }}>
+        {cards.map(card => (
+          <div
+            key={card.id}
+            style={{
+              width: 220,
+              border: '2px solid #333',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              cursor: loadingId ? 'not-allowed' : 'pointer',
+              opacity: loadingId === card.id ? 0.5 : 1,
+              transition: 'opacity 0.2s',
+              position: 'relative',
+            }}
+            onClick={() => handleCardClick(card)}
+          >
           <img
             src={card.image}
             alt={card.alt || card.name}
@@ -65,6 +84,13 @@ export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Prop
           )}
         </div>
       ))}
-    </div>
+      </div>
+      <AgentCardDetailsModal
+        card={selectedCard}
+        open={modalOpen}
+        onClose={handleClose}
+        onDeploy={handleDeploy}
+      />
+    </>
   );
 }

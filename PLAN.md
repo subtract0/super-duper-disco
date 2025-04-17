@@ -68,8 +68,10 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
 - **Acceptance Criteria:**
   - All docs are up-to-date after major changes, including agent recovery and notification logic
   - PLAN.md reflects new tickets and completed work
+  - PLAN.md must be kept up to date after every major change (see Documentation Policy)
 - **Recommended Approach:**
   - Add/update docs as part of PR acceptance checklist
+  - PLAN.md, README.md, and DOC.md must all be updated after every major change
   - Document agent lifecycle, health states, and notification flow
 
 ### 7. Swarm Agent Orchestration (Autogen & LangChain)

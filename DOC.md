@@ -1,5 +1,12 @@
 # HandwerkerPro Documentation
 
+## Documentation Policy
+- After every major code or architecture change, you **must** update `README.md`, `DOC.md`, and `PLAN.md` to reflect the latest state of the system.
+- As part of the PR checklist, verify that all documentation is up-to-date and includes:
+  - Agent lifecycle and health state changes
+  - Notification logic and user-facing feedback
+  - Any new tickets or completed work in PLAN.md
+
 ## Overview
 HandwerkerPro is a modern, production-ready Next.js application for managing craftsmen and contractor quoting in Germany. It features robust authentication (Supabase), error monitoring (Sentry), and a polished UI (Tailwind CSS).
 

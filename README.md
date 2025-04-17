@@ -32,11 +32,20 @@ A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, W
 
 - The system is designed to recover from crashes without losing state by using an external store for memory. This ensures that restarts do not wipe important context.
 - Agents feature **automatic and manual recovery**: if an agent crashes, the orchestrator attempts auto-restart (with retries and cooldowns). Recovery status is tracked and exposed in the UI.
-- **Health states** include: `healthy`, `pending`, `crashed`, `restarting`, `recovered`, and `recovery_failed` for robust orchestration and monitoring.
+- **Health states** include: `pending`, `healthy`, `crashed`, `restarting`, `recovered`, and `recovery_failed` for robust orchestration and monitoring. All health states are type-safe and reflected in the UI and API responses.
 - **UI notifications:** When an agent recovers, restarts, or recovery fails, a toast notification is shown to the user (color-coded for success/info/error). This provides instant, visible feedback on agent health.
 - All agent status and notifications are type-safe and reflected in the UI and API responses.
 - Periodic backups are implemented for any important data, including long-term conversation history or vector indexes, to prevent data loss.
 - If the agent crashes or an external API fails, the system either retries the operation or responds to the user with an apology, rather than going silent.
+
+See [DOC.md](./DOC.md) for full documentation of agent lifecycle, health states, and notification flow.
+
+### Documentation Checklist
+- After every major code or architecture change, update `README.md`, `DOC.md`, and `PLAN.md` to reflect the latest state of the system.
+- As part of the PR checklist, verify that all documentation is up-to-date and includes:
+  - Agent lifecycle and health state changes
+  - Notification logic and user-facing feedback
+  - Any new tickets or completed work in PLAN.md
 
 ## Setup
 

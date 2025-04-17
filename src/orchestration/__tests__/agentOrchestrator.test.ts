@@ -74,9 +74,9 @@ describe('AgentOrchestrator', () => {
 
   it('should launch a swarm of agents and set their health', async () => {
     const agents = [
-      { id: 'swarm1', type: 'test', status: 'pending', host: 'localhost', config: {} },
-      { id: 'swarm2', type: 'test', status: 'pending', host: 'localhost', config: {} },
-      { id: 'swarm3', type: 'test', status: 'pending', host: 'localhost', config: {} },
+      { id: 'swarm1', type: 'test', status: 'pending' as const, host: 'localhost', config: {} },
+      { id: 'swarm2', type: 'test', status: 'pending' as const, host: 'localhost', config: {} },
+      { id: 'swarm3', type: 'test', status: 'pending' as const, host: 'localhost', config: {} },
     ];
     const launched = await orchestrator.spawnSwarm(agents);
     expect(launched.length).toBe(3);

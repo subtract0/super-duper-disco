@@ -19,7 +19,6 @@ const TELEGRAM_FILE_API = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN
 async function sendTelegramMessage(chat_id: number | string, text: string) {
   await axios.post(`${TELEGRAM_API}/sendMessage`, { chat_id, text });
 }
-
 // Helper: Download file from Telegram
 async function downloadTelegramFile(file_id: string): Promise<{ buffer: Buffer, file_name: string, mime_type: string, file_size: number }> {
   // 1. Get file path
@@ -35,7 +34,6 @@ async function downloadTelegramFile(file_id: string): Promise<{ buffer: Buffer, 
     file_size: parseInt(headers['content-length'] ?? '0', 10),
   };
 }
-
 // Helper: Upload file to Supabase Storage
 async function uploadToSupabaseStorage(buffer: Buffer, file_name: string, mime_type: string) {
   const { data, error } = await supabase.storage.from('messages').upload(file_name, buffer, {
@@ -45,7 +43,6 @@ async function uploadToSupabaseStorage(buffer: Buffer, file_name: string, mime_t
   if (error) throw error;
   return data?.path ? `${SUPABASE_URL}/storage/v1/object/public/messages/${data.path}` : null;
 }
-
 // Helper: Transcribe voice (Whisper API)
 async function transcribeVoiceWhisper(buffer: Buffer, mime_type: string): Promise<string> {
   // Node.js FormData for Whisper API
@@ -59,12 +56,10 @@ async function transcribeVoiceWhisper(buffer: Buffer, mime_type: string): Promis
     headers: {
       'Authorization': `Bearer ${WHISPER_API_KEY}`,
       ...formData.getHeaders(),
-    },
-
+    }
   }) as { data: { text: string } };
   return data.text;
 }
-
 // Helper: Call OpenAI GPT-4.1 API
 type Message = { role: string; content: string };
 async function callOpenAIGPT(messages: Message[]): Promise<string> {
@@ -99,22 +94,29 @@ async function callOpenAIGPT(messages: Message[]): Promise<string> {
   ) as { data: { choices: { message: { content: string } }[] } };
   return response.data.choices[0].message.content.trim();
 }
-
 // Main handler
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') return res.status(405).end();
-  const body = req.body;
-  // Telegram webhook structure
-  const message = body.message;
-  console.log('[DEBUG] Incoming message:', JSON.stringify(message));
-  if (!message) return res.status(200).json({ ok: true });
-  // Defensive: ensure message.from exists before accessing
-  if (!message.from) {
-    return res.status(200).json({ ok: false, error: 'Missing sender information (message.from)' });
+  let body = req.body;
+  if (typeof body === 'string') {
+    try {
+      body = JSON.parse(body);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: 'Invalid JSON in request body' });
+    }
   }
-  const chat_id = message.chat.id;
-  const user_id = String(message.from.id);
-  const telegram_message_id = message.message_id;
+  console.log('[DEBUG] Full request body:', JSON.stringify(body));
+  try {
+    // Defensive: extract message from possible telegram update types
+    const message = body.message || body.edited_message || null;
+    console.log('[DEBUG] Incoming message:', JSON.stringify(message));
+    if (!message) return res.status(200).json({ ok: false, error: 'No message in update' });
+    if (!message.from || !message.chat) {
+      throw new Error('Missing sender or chat information (message.from or message.chat)');
+    }
+    const chat_id = message.chat.id;
+    const user_id = String(message.from.id);
+    const telegram_message_id = message.message_id;
 
   let message_type = 'text';
   let content = '';
@@ -137,10 +139,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const file = await downloadTelegramFile(file_id);
       if (file.file_size > 25 * 1024 * 1024) throw new Error('File too large');
       const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type);
-      content = url;
+      content = url ?? '';
       file_name = file.file_name ?? '';
       file_size = file.file_size;
-      mime_type = file.mime_type;
+      mime_type = file.mime_type ?? '';
     }
     // 3. Document (PDF, TXT, etc.)
     else if (message.document) {
@@ -150,10 +152,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const file = await downloadTelegramFile(file_id);
       if (file.file_size > 25 * 1024 * 1024) throw new Error('File too large');
       const url = await uploadToSupabaseStorage(file.buffer, file.file_name, file.mime_type);
-      content = url;
+      content = url ?? '';
       file_name = file.file_name ?? '';
       file_size = file.file_size;
-      mime_type = file.mime_type;
+      mime_type = file.mime_type ?? '';
     }
     // 4. Voice
     else if (message.voice) {
@@ -174,16 +176,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       await sendTelegramMessage(chat_id, 'Unsupported message type. Only text, images, voice, and files under 25MB are supported.');
       return res.status(200).json({ ok: true });
     }
-
     // Save message to Supabase
     const { error: insertError } = await supabase.from('messages').insert([
       {
         user_id,
         message_type,
         content,
-        file_name,
+        file_name: file_name ?? '',
         file_size,
-        mime_type,
+        mime_type: mime_type ?? '',
         telegram_message_id,
         role: 'user',
       },
@@ -202,7 +203,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!Array.isArray(history)) {
       console.error('[GPT] History is not an array:', history);
     }
-
     // Call OpenAI GPT-4.1 API
     console.log('[GPT] Calling OpenAI for user:', user_id);
     // Defensive: filter out any null/undefined or malformed history items
@@ -211,22 +211,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.log('[GPT] OpenAI response:', agent_response);
 
     // Save agent response
-    await supabase.from('messages').insert([
-      {
-        user_id,
-        message_type: 'text',
-        content: agent_response,
-        role: 'agent',
-      },
-    ]);
-
-    // Reply to user
-    await sendTelegramMessage(chat_id, agent_response);
-    res.status(200).json({ ok: true });
+      await sendTelegramMessage(chat_id, agent_response);
+      res.status(200).json({ ok: true });
+    } catch (err: unknown) {
+      const error = err instanceof Error ? err : new Error('Unknown error');
+      console.error('[GPT] Error:', error);
+      if (typeof chat_id !== 'undefined') {
+        await sendTelegramMessage(chat_id, `Error: ${error.message}`);
+      }
+      res.status(200).json({ ok: false, error: error.message });
+    }
   } catch (err: unknown) {
     const error = err instanceof Error ? err : new Error('Unknown error');
     console.error('[GPT] Error:', error);
-    await sendTelegramMessage(chat_id, `Error: ${error.message}`);
     res.status(200).json({ ok: false, error: error.message });
   }
 }

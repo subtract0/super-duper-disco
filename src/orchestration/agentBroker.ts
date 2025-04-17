@@ -11,14 +11,26 @@ export type AgentIdeaCard = {
   config: Record<string, any>;
 };
 
-const PLACEHOLDER_IMAGES = [
-  '/card-art/card1.png',
-  '/card-art/card2.png',
-  '/card-art/card3.png',
-];
+import fs from 'fs';
+import path from 'path';
 
-function randomCardArt() {
-  return PLACEHOLDER_IMAGES[Math.floor(Math.random() * PLACEHOLDER_IMAGES.length)];
+function getAvailableCardImages(): string[] {
+  const dir = path.join(process.cwd(), 'public', 'card-art');
+  try {
+    const files = fs.readdirSync(dir);
+    return files.filter(f => /\.(png|jpg|jpeg)$/i.test(f)).map(f => `/card-art/${f}`);
+  } catch {
+    return [];
+  }
+}
+
+function randomCardArt(): { image: string; alt: string } {
+  const images = getAvailableCardImages();
+  if (images.length === 0) {
+    return { image: '/card-art-fallback.png', alt: 'Default agent card art' };
+  }
+  const pick = images[Math.floor(Math.random() * images.length)];
+  return { image: pick, alt: path.basename(pick, path.extname(pick)).replace(/[-_]/g, ' ') + ' art' };
 }
 
 function randomAgentIdeas(n: number = 3): AgentIdeaCard[] {
@@ -57,7 +69,7 @@ function randomAgentIdeas(n: number = 3): AgentIdeaCard[] {
       id: uuidv4(),
       name: idea.name,
       description: idea.description,
-      image: randomCardArt(),
+      ...randomCardArt(),
       config: idea.config,
     };
   });

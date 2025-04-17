@@ -5,6 +5,7 @@ export type AgentIdeaCard = {
   name: string;
   description: string;
   image: string;
+  alt?: string;
 };
 
 interface Props {
@@ -34,7 +35,7 @@ export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Prop
         >
           <img
             src={card.image}
-            alt={card.name}
+            alt={card.alt || card.name}
             style={{
               width: '100%',
               height: 140,

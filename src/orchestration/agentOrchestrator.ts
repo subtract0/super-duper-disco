@@ -12,10 +12,22 @@
 export type OrchestratedAgent = {
   id: string;
   type: string;
-  status: 'pending' | 'healthy' | 'crashed';
+  status: 'pending' | 'healthy' | 'crashed' | 'restarting' | 'recovered' | 'recovery_failed';
   host: string;
   config: Record<string, any>;
   // Extend with orchestration/runtime info as needed
+};
+
+export type AgentMessage = {
+  from: string;
+  to: string;
+  content: any;
+  timestamp: number;
+};
+
+export type SwarmState = {
+  agents: OrchestratedAgent[];
+  messages: AgentMessage[];
 };
 
 /**
@@ -34,6 +46,45 @@ export class AgentOrchestrator {
    * In-memory list of orchestrated agents. In production, this should be backed by a DB or distributed store.
    */
   private agents: OrchestratedAgent[] = [];
+
+  /**
+   * In-memory message bus for agent-to-agent communication (stub for swarm/autogen/LangChain integration)
+   */
+  private messageBus: AgentMessage[] = [];
+
+  /**
+   * Spawn a swarm of agents (stub for autogen/LangChain integration)
+   */
+  async spawnSwarm(agentConfigs: OrchestratedAgent[]): Promise<OrchestratedAgent[]> {
+    // Future: Use autogen/LangChain to launch and coordinate multiple agents
+    const launched = await Promise.all(agentConfigs.map(cfg => this.launchAgent(cfg)));
+    return launched;
+  }
+
+  /**
+   * Send a message from one agent to another (stub for agent communication)
+   */
+  async sendAgentMessage(msg: AgentMessage): Promise<void> {
+    // Future: Use autogen/LangChain or distributed message bus
+    this.messageBus.push({ ...msg, timestamp: Date.now() });
+  }
+
+  /**
+   * Get all messages sent to a particular agent
+   */
+  getAgentMessages(agentId: string): AgentMessage[] {
+    return this.messageBus.filter(m => m.to === agentId);
+  }
+
+  /**
+   * Get the full swarm state (agents + messages)
+   */
+  getSwarmState(): SwarmState {
+    return {
+      agents: [...this.agents],
+      messages: [...this.messageBus],
+    };
+  }
 
   constructor() {
     // Future: Load agents from persistent store, initialize orchestrator state

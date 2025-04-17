@@ -71,4 +71,45 @@ describe('AgentOrchestrator', () => {
     }
     expect(['recovered', 'recovery_failed']).toContain(health);
   });
+
+  it('should launch a swarm of agents and set their health', async () => {
+    const agents = [
+      { id: 'swarm1', type: 'test', status: 'pending', host: 'localhost', config: {} },
+      { id: 'swarm2', type: 'test', status: 'pending', host: 'localhost', config: {} },
+      { id: 'swarm3', type: 'test', status: 'pending', host: 'localhost', config: {} },
+    ];
+    const launched = await orchestrator.spawnSwarm(agents);
+    expect(launched.length).toBe(3);
+    for (const a of launched) {
+      expect(['swarm1', 'swarm2', 'swarm3']).toContain(a.id);
+      expect(a.status).toBe('healthy');
+      expect(orchestrator.getHealth(a.id)).toBe('healthy');
+    }
+  });
+
+  it('should allow agent-to-agent messaging and retrieval', async () => {
+    await orchestrator.launchAgent({ id: 'msg1', type: 'test', status: 'pending', host: 'localhost', config: {} });
+    await orchestrator.launchAgent({ id: 'msg2', type: 'test', status: 'pending', host: 'localhost', config: {} });
+    await orchestrator.sendAgentMessage({ from: 'msg1', to: 'msg2', content: { text: 'Hello' }, timestamp: Date.now() });
+    await orchestrator.sendAgentMessage({ from: 'msg2', to: 'msg1', content: { text: 'Reply' }, timestamp: Date.now() });
+    const msgsTo2 = orchestrator.getAgentMessages('msg2');
+    const msgsTo1 = orchestrator.getAgentMessages('msg1');
+    expect(msgsTo2.length).toBe(1);
+    expect(msgsTo2[0].from).toBe('msg1');
+    expect(msgsTo2[0].content.text).toBe('Hello');
+    expect(msgsTo1.length).toBe(1);
+    expect(msgsTo1[0].from).toBe('msg2');
+    expect(msgsTo1[0].content.text).toBe('Reply');
+  });
+
+  it('should return full swarm state', async () => {
+    await orchestrator.launchAgent({ id: 'swarmA', type: 'test', status: 'pending', host: 'localhost', config: {} });
+    await orchestrator.launchAgent({ id: 'swarmB', type: 'test', status: 'pending', host: 'localhost', config: {} });
+    await orchestrator.sendAgentMessage({ from: 'swarmA', to: 'swarmB', content: { data: 123 }, timestamp: Date.now() });
+    const state = orchestrator.getSwarmState();
+    expect(Array.isArray(state.agents)).toBe(true);
+    expect(Array.isArray(state.messages)).toBe(true);
+    expect(state.agents.find(a => a.id === 'swarmA')).toBeDefined();
+    expect(state.messages.find(m => m.from === 'swarmA' && m.to === 'swarmB')).toBeDefined();
+  });
 });

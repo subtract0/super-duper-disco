@@ -186,3 +186,4 @@ describe('Telegram API Handler', () => {
     expect((axios.post as jest.Mock).mock.calls[0][1].chat_id).toBe(1);
     expect((axios.post as jest.Mock).mock.calls[0][1].text).toMatch(/OpenAI down/);
   });
+});

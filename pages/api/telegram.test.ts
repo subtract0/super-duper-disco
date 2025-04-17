@@ -60,4 +60,36 @@ describe('Telegram API Handler', () => {
     }
     expect(response).toMatchObject({ ok: true });
   });
+
+  it('handles a document (file) upload and stores URL', async () => {
+    // Mock file download from Telegram (axios.get for file path)
+    (axios.get as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({ data: { result: { file_path: 'docs/mockfile.pdf' } } })
+    );
+    // Mock actual file download (axios.get for file buffer)
+    (axios.get as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({ data: Buffer.from('filecontent'), headers: { 'content-type': 'application/pdf', 'content-length': '12' } })
+    );
+    // Mock OpenAI response (not used, but keeps test structure consistent)
+    mockOpenAIResponse('File received!');
+
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: {
+        message: {
+          chat: { id: 1 },
+          from: { id: 2 },
+          message_id: 4,
+          document: { file_id: 'abc123', file_name: 'mockfile.pdf', mime_type: 'application/pdf', file_size: 12 }
+        }
+      }
+    });
+    await handler(req, res, (handler as any).supabase);
+    expect(res._getStatusCode()).toBe(200);
+    const response = JSON.parse(res._getData());
+    expect(response).toMatchObject({ ok: true });
+    // Optionally: check mocks were called as expected
+    expect((axios.get as jest.Mock).mock.calls[0][0]).toContain('/getFile?file_id=abc123');
+    expect((axios.get as jest.Mock).mock.calls[1][0]).toContain('/file/bot');
+  });
 });

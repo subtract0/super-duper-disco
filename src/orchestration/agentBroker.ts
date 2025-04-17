@@ -2,6 +2,7 @@
 // Agent Broker logic: suggests agent ideas as cards and deploys selected agent.
 import { v4 as uuidv4 } from 'uuid';
 import { AgentOrchestrator, OrchestratedAgent } from './agentOrchestrator';
+import { agentHistoryStore } from './agentHistory';
 
 export type AgentIdeaCard = {
   id: string;
@@ -116,12 +117,24 @@ export class AgentBroker {
   }
 
   async deployIdea(card: AgentIdeaCard, host: string = 'default'): Promise<OrchestratedAgent> {
-    return this.orchestrator.launchAgent({
+    const agent = await this.orchestrator.launchAgent({
       id: uuidv4(),
       type: card.config.type,
       status: 'pending',
       host,
       config: card.config,
     });
+    agentHistoryStore.addDeployment({
+      agentId: agent.id,
+      cardName: card.name,
+      timestamp: Date.now(),
+      host,
+      config: card.config,
+    });
+    return agent;
+  }
+
+  getDeploymentHistory(limit: number = 20) {
+    return agentHistoryStore.getDeployments(limit);
   }
 }

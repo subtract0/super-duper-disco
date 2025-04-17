@@ -9,7 +9,13 @@ const broker = new AgentBroker(orchestrator);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
-    // Suggest 2-3 agent ideas as cards
+    // If ?history=1, return deployment history
+    if (req.query.history === '1') {
+      const history = broker.getDeploymentHistory(20);
+      res.status(200).json({ history });
+      return;
+    }
+    // Otherwise, suggest 2-3 agent ideas as cards
     const n = Math.max(2, Math.min(3, Number(req.query.n) || 3));
     const ideas = await broker.suggestIdeas(n);
     res.status(200).json({ cards: ideas });

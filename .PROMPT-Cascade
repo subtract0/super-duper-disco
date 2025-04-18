@@ -16,7 +16,6 @@
 - Always check workspace cleanliness before commit/push
 - Never introduce new patterns/files unless required by protocol
 - Never overwrite .env without explicit confirmation
-
 ---
 
 # Role and Objective

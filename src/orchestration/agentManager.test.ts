@@ -1,6 +1,49 @@
+// Mocks for modular agent instantiation: ensures no dependency errors and test isolation
+jest.doMock('./langchainAgent', () => ({ LangChainAgent: jest.fn().mockImplementation((id) => ({
+  id,
+  name: 'langchain',
+  status: 'running',
+  logs: [],
+  start: jest.fn(),
+  stop: jest.fn(),
+  getLogs: jest.fn().mockReturnValue([]),
+  updateHeartbeat: jest.fn(),
+  updateActivity: jest.fn(),
+})) }));
+jest.doMock('./autoGenAgent', () => ({ AutoGenAgent: jest.fn().mockImplementation((id) => ({
+  id,
+  name: 'autogen',
+  status: 'running',
+  logs: [],
+  start: jest.fn(),
+  stop: jest.fn(),
+  getLogs: jest.fn().mockReturnValue([]),
+  updateHeartbeat: jest.fn(),
+  updateActivity: jest.fn(),
+})) }));
+
 import { agentManager } from './agentManager';
 
 describe('AgentManager', () => {
+
+  /**
+   * Simulate agent crash and test auto-recovery (heartbeat loss detection).
+   * This is a unit test for the heartbeat/crashCount logic.
+   */
+  test('should detect agent crash on missed heartbeat', () => {
+    const id = 'crash-test-agent';
+    agentManager.deployAgent(id, id, 'native', {});
+    // Simulate missed heartbeat by manipulating lastHeartbeat
+    const agent = agentManager.listAgents().find(a => a.id === id);
+    if (agent) {
+      agent.lastHeartbeat = Date.now() - 20000; // 20s ago
+      agent.status = 'running';
+      const status = agentManager.getAgentHealth(id);
+      expect(status).toBe('error');
+      expect(agent.crashCount).toBe(1);
+    }
+    agentManager.stopAgent(id);
+  });
   beforeEach(() => {
     // Reset state before each test
     agentManager.listAgents().forEach(agent => {

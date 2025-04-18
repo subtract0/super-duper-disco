@@ -51,9 +51,11 @@ describe('AgentManager', () => {
   });
   beforeEach(() => {
     // Reset state before each test
-    agentManager.listAgents().forEach(agent => {
-      agentManager.stopAgent(agent.id);
-    });
+    agentManager.clearAllAgents();
+  });
+  afterEach(() => {
+    // Ensure cleanup after each test
+    agentManager.clearAllAgents();
   });
 
   test('should deploy and start an agent', () => {

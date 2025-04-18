@@ -1,7 +1,7 @@
 // Polyfill fetch for Node.js (needed for OpenAI SDK and other ESM modules)
 import 'openai/shims/node';
 
-const { TextEncoder, TextDecoder } = await import('util');
+const { TextEncoder, TextDecoder } = require('util');
 
 if (typeof globalThis.TextEncoder === 'undefined') {
   globalThis.TextEncoder = TextEncoder;

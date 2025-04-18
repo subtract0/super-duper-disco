@@ -23,6 +23,10 @@ if (process.env.NODE_ENV === 'test') {
       signInWithPassword: jest.fn(() => Promise.resolve({ error: null })),
       signUp: jest.fn(() => Promise.resolve({ error: null })),
     },
+    from: jest.fn(() => ({
+      insert: jest.fn(() => Promise.resolve({ error: null })),
+      select: jest.fn(() => Promise.resolve({ data: [], error: null })),
+    })),
     // Add other methods as needed
   } as any;
 } else {

@@ -1,20 +1,17 @@
-module.exports = {
-  transform: {
-    '^.+\\.ts$': 'ts-jest',
-    '^.+\\.(tsx|js|jsx)$': 'babel-jest',
-  },
-  transformIgnorePatterns: [
-    '/node_modules/(?!(openai|@langchain/openai)/)'
-  ],
-  testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+const nextJest = require('next/jest');
 
+const createJestConfig = nextJest({
+  dir: './',
+});
+
+/** @type {import('jest').Config} */
+const customJestConfig = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   setupFiles: ['<rootDir>/jest.polyfills.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
-  moduleDirectories: ['node_modules', '<rootDir>', '<rootDir>/src'],
-
 };
+
+module.exports = createJestConfig(customJestConfig);

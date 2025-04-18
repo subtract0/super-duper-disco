@@ -40,6 +40,9 @@ const mockSupabaseInsert = () => {
 };
 
 describe('Telegram API Handler', () => {
+  // Skipping tests that only verify mocks or do not provide integration value
+  // test.skip('mock-only or redundant test', () => {});
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockSupabaseInsert();

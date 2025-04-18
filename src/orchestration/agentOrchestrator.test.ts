@@ -77,4 +77,27 @@ describe('AgentOrchestrator', () => {
     const result = await orchestrator.reviewWithQC(ticket, implementation, 'dummy-key');
     expect(result).toContain('PASS');
   });
+
+  test('should auto-recover a crashed agent and reflect live state', async () => {
+    const agentConfig: OrchestratedAgent = {
+      id: 'orch-agent-crash-1',
+      type: 'test-type',
+      status: 'pending',
+      host: 'localhost',
+      config: {},
+    };
+    await orchestrator.launchAgent(agentConfig);
+    // Simulate crash by stopping the agent via orchestrator (ensures state sync)
+    await orchestrator.stopAgent(agentConfig.id);
+    // Orchestrator should now see the agent as crashed
+    expect(orchestrator.getHealth(agentConfig.id)).toBe('crashed');
+    // Now trigger orchestrator auto-recovery
+    const recoveryResult = await orchestrator.restartAgent(agentConfig.id);
+    expect(recoveryResult).toBe('recovered');
+    // Health should now be 'recovered'
+    expect(orchestrator.getHealth(agentConfig.id)).toBe('recovered');
+    // Check agent is still present in orchestrator list
+    const agents = orchestrator.listAgents();
+    expect(agents.some(a => a.id === agentConfig.id)).toBe(true);
+  });
 });

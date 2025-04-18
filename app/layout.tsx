@@ -1,3 +1,4 @@
+import * as React from "react";
 import './globals.css';
 import { SentryErrorBoundary } from '../components/SentryErrorBoundary';
 import { ReactNode } from 'react';

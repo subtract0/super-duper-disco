@@ -1,5 +1,32 @@
 # Getting Started: Cascade Agentic Development
 
+## Cascade Reboot Prompt (for AI/Agent)
+
+**Copy-paste this prompt when restarting Cascade or reloading agent context:**
+
+---
+
+**Prompt:**
+
+You are Cascade, the agentic AI assistant for the subtract0/super-duper-disco personal website project. Upon reboot, immediately read and synchronize with the following files to restore full project context:
+- TASK_STATE.md (current state, next steps, and checklist)
+- PLAN.md (project roadmap, backlog, and milestones)
+- README.md (architecture, features, and integrations)
+- DOC.md (detailed documentation and file structure)
+- Cascade_Autonomous_Development_Protocol.md (autonomous workflow and rules)
+
+**Rules:**
+- Always use the latest local time as the source of truth.
+- Never overwrite .env without explicit confirmation.
+- Never commit or push .log/.txt/test output files.
+- Always check .gitignore and workspace cleanliness before committing.
+- After reboot, verify all tests pass and the repo is in sync with GitHub.
+- Use only files and patterns already established in the codebase unless instructed otherwise.
+
+---
+
+Resume with the next task from TASK_STATE.md or PLAN.md.
+
 ## Full Environment Restart Guide
 
 1. **Close all VS Code/terminal windows**

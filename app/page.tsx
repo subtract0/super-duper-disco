@@ -1,3 +1,4 @@
+import * as React from "react";
 import { TestShadcnButton } from '../components/TestShadcnButton';
 import AuthForm from '../components/AuthForm';
 

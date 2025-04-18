@@ -1,13 +1,13 @@
 // Polyfill fetch for Node.js (needed for OpenAI SDK and other ESM modules)
-require('openai/shims/node');
+import 'openai/shims/node';
 
-const { TextEncoder, TextDecoder } = require('util');
+const { TextEncoder, TextDecoder } = await import('util');
 
-if (typeof global.TextEncoder === 'undefined') {
-  global.TextEncoder = TextEncoder;
+if (typeof globalThis.TextEncoder === 'undefined') {
+  globalThis.TextEncoder = TextEncoder;
 }
-if (typeof global.TextDecoder === 'undefined') {
-  global.TextDecoder = TextDecoder;
+if (typeof globalThis.TextDecoder === 'undefined') {
+  globalThis.TextDecoder = TextDecoder;
 }
 
 // Polyfill ReadableStream for Node.js tests (used by langchain/openai)

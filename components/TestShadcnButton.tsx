@@ -1,3 +1,4 @@
+import * as React from "react";
 // Simple shadcn/ui-style button for test
 export function TestShadcnButton() {
   return (

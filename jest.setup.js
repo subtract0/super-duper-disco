@@ -1,1 +1,2 @@
-require('@testing-library/jest-dom');
+export {};
+import '@testing-library/jest-dom';

@@ -49,7 +49,7 @@ export class AgentOrchestrator {
   /**
    * In-memory list of orchestrated agents. In production, this should be backed by a DB or distributed store.
    */
-  private agents: OrchestratedAgent[] = [];
+  // Agents are now managed solely via agentManager; no in-memory duplication here.
 
   /**
    * In-memory agent health/activity map (mirrors AgentManager)
@@ -91,7 +91,7 @@ export class AgentOrchestrator {
   getSwarmState(): SwarmState {
     // Enrich agents with health/activity
     const { agentManager } = require('./agentManager');
-    const agentsWithHealth = this.agents.map(agent => ({
+    const agentsWithHealth = agentManager.listAgents().map(agent => ({
       ...agent,
       lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
       lastActivity: agentManager.getAgentLastActivity(agent.id),
@@ -136,14 +136,8 @@ export class AgentOrchestrator {
    */
   async launchQCAgent(id: string, openAIApiKey: string): Promise<QCAgent> {
     const qcAgent = new QCAgent(id, openAIApiKey);
-    // Optionally add to orchestrator's agents list for monitoring
-    this.agents.push({
-      id,
-      type: 'qc',
-      status: 'healthy',
-      host: 'local',
-      config: { openAIApiKey }
-    });
+    // Optionally: register QC agent in agentManager for monitoring (future extension)
+    // agentManager.deployAgent(id, id, 'qc', { openAIApiKey });
     agentLogStore.addLog({
       agentId: id,
       timestamp: Date.now(),

@@ -51,33 +51,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse,
     if (message.text) {
       message_type = 'text';
       content = message.text;
-      // Feature request detection (simple heuristic)
+      // Feature request detection (LLM-powered intent extraction)
       const featureRequestPattern = /^(build|create|deploy|start|launch)\b/i;
-      if (featureRequestPattern.test(content.trim())) {
+      let isFeatureRequest = featureRequestPattern.test(content.trim());
+      let agentType = 'native';
+      let agentConfig: any = {};
+      if (!isFeatureRequest) {
+        // Use LLM to extract intent if not a simple command
+        try {
+          const { callOpenAIGPT } = require('../../utils/telegram/openai');
+          const llmPrompt = [
+            { role: 'system', content: 'You are an intent extraction assistant for a multi-agent orchestrator. If the user is asking to create, build, launch, or deploy an agent or feature, respond with a JSON object containing { intent: "create_agent", agent_type: ..., config: ... }. If not, respond with { intent: "none" }.' },
+            { role: 'user', content }
+          ];
+          const llmResponse = await callOpenAIGPT(llmPrompt);
+          let llmIntent;
+          try { llmIntent = JSON.parse(llmResponse); } catch (e) {}
+          if (llmIntent && llmIntent.intent === 'create_agent') {
+            isFeatureRequest = true;
+            agentType = llmIntent.agent_type || 'native';
+            agentConfig = llmIntent.config || {};
+          }
+        } catch (e) {
+          // fallback: ignore LLM error, do not trigger agent creation
+        }
+      }
+      if (isFeatureRequest) {
         // Trigger agent creation via orchestrator
         try {
           const { orchestrator } = require('../../src/orchestration/orchestratorSingleton');
           const { v4: uuidv4 } = require('uuid');
           const agentId = uuidv4();
-          const agentConfig = {
+          const launched = await orchestrator.launchAgent({
             id: agentId,
-            type: 'telegram',
+            type: agentType,
             status: 'pending',
-            host: 'local',
-            config: { description: content }
-          };
-          orchestrator.launchAgent(agentConfig).then((agent: any) => {
-            sendTelegramMessage(chat_id, `✅ Agent created!\nID: ${agent.id}\nStatus: ${agent.status}`);
-          }).catch((err: any) => {
-            sendTelegramMessage(chat_id, `❌ Failed to create agent: ${err.message || err}`);
+            host: 'telegram',
+            config: agentConfig,
           });
-          // Optionally, inform the user immediately
-          await sendTelegramMessage(chat_id, 'Your agent is being created. You will receive an update shortly.');
-          return res.status(200).json({ ok: true, message: 'Agent creation triggered' });
-        } catch (err: any) {
-          await sendTelegramMessage(chat_id, `❌ Internal error during agent creation: ${err.message || err}`);
-          return res.status(500).json({ ok: false, error: err.message || err });
+          await sendTelegramMessage(chat_id, `✅ Agent created: ${launched.id}\nType: ${launched.type}`);
+        } catch (err) {
+          await sendTelegramMessage(chat_id, `❌ Failed to create agent: ${err?.message || err}`);
         }
+        return res.status(200).json({ ok: true });
       }
     }
     // 2. Image (photo)

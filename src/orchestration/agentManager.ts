@@ -60,20 +60,34 @@ export class BaseAgent {
   }
 }
 
+/**
+ * Factory function for modular agent instantiation.
+ * Easily extendable for new agent types.
+ */
+function createAgent(id: string, name: string, type: string, config: any): BaseAgent {
+  switch (type) {
+    case 'langchain': {
+      const { LangChainAgent } = require('./langchainAgent');
+      return new LangChainAgent(id, config.openAIApiKey || process.env.OPENAI_API_KEY);
+    }
+    case 'autogen': {
+      const { AutoGenAgent } = require('./autoGenAgent');
+      return new AutoGenAgent(id);
+    }
+    default:
+      return new BaseAgent(id, name);
+  }
+}
+
 class AgentManager {
   agents: Map<string, AgentInfo> = new Map();
 
+  /**
+   * Deploys and starts a new agent of the given type.
+   * Uses createAgent factory for modularity.
+   */
   deployAgent(id: string, name: string, type: string = 'native', config: any = {}) {
-    let agent: any;
-    if (type === 'langchain') {
-      const { LangChainAgent } = require('./langchainAgent');
-      agent = new LangChainAgent(id, config.openAIApiKey || process.env.OPENAI_API_KEY);
-    } else if (type === 'autogen') {
-      const { AutoGenAgent } = require('./autoGenAgent');
-      agent = new AutoGenAgent(id);
-    } else {
-      agent = new BaseAgent(id, name);
-    }
+    const agent = createAgent(id, name, type, config);
     agent.start();
     const now = Date.now();
     this.agents.set(id, {

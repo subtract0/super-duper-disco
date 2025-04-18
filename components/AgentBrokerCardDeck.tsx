@@ -33,8 +33,15 @@ export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Prop
     onSelect(card);
   };
 
+  // Debug log
+  console.log('[AgentBrokerCardDeck] cards prop:', cards);
   return (
     <>
+      {(!cards || cards.length === 0) ? (
+        <div style={{ color: 'red', marginTop: 40, fontWeight: 600, fontSize: 18 }}>
+          No agent cards available. Try creating one with the prompt above!
+        </div>
+      ) : null}
       <div style={{ display: 'flex', gap: 24, justifyContent: 'center', marginTop: 32 }}>
         {cards.map(card => (
           <div

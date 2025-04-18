@@ -1,0 +1,28 @@
+name: Preview Deploy (PR)
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  preview-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - name: Deploy Preview to Vercel
+        run: npx vercel --token ${{ secrets.VERCEL_TOKEN }} --scope ${{ secrets.VERCEL_ORG_ID }} --yes --confirm --prebuilt --env PREVIEW=true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      - name: Comment Preview URL on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: Preview Deployment
+          message: |
+            🚀 Preview deployment triggered for this PR! Check Vercel dashboard for the preview URL.

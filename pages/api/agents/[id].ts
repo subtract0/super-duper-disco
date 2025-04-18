@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { orchestrator } from "./index";
+import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
 import { getAgents, saveAgents } from '../../../__mocks__/persistentStore';
 import type { Agent } from '../../../types/agent';
 
@@ -10,25 +10,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return;
   }
   if (req.method === "DELETE") {
-    // Stop agent via orchestrator and remove from persistent store
-    await orchestrator.stopAgent(id);
-    let agents: Agent[] = getAgents();
-    const prevLen = agents.length;
-    agents = agents.filter((agent: Agent) => agent.id !== id);
-    if (agents.length === prevLen) {
+    // Stop agent via orchestrator
+    const found = orchestrator.getAgent(id);
+    if (!found) {
       res.status(404).json({ error: 'Agent not found for deletion' });
       return;
     }
-    saveAgents(agents);
-    res.status(200).json({ ok: true });
+    await orchestrator.stopAgent(id);
+    // After stop, agent remains in orchestrator's list with status 'crashed'. Return the updated agent.
+    const updated = orchestrator.getAgent(id);
+    res.status(200).json({ ok: true, agent: updated });
   } else if (req.method === "GET") {
-    // Get agent details
-    const agents: Agent[] = getAgents();
-    const agent = agents.find((agent: Agent) => agent.id === id);
+    // Get agent details from orchestrator
+    const agent = orchestrator.getAgent(id);
     if (!agent) {
       res.status(404).json({ error: 'Agent not found' });
       return;
     }
+    // Always return the agent, even if status is 'crashed'
     res.status(200).json({ agent });
   } else {
     res.status(405).json({ error: 'Method not allowed' });

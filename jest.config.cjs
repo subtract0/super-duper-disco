@@ -1,12 +1,16 @@
 module.exports = {
   transform: {
-    '^.+\\.(ts|tsx)$': 'babel-jest',
+    '^.+\\.(ts|tsx)$': 'ts-jest',
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
+  transformIgnorePatterns: [
+    '/node_modules/(?!(openai|@langchain/openai)/)'
+  ],
   testPathIgnorePatterns: ['/node_modules/', '/.next/'],
 
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
+  setupFiles: ['<rootDir>/jest.polyfills.js'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },

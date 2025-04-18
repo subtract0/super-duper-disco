@@ -1,8 +1,6 @@
 // pages/api/agent-health.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AgentOrchestrator } from '../../src/orchestration/agentOrchestrator';
-
-const orchestrator = new AgentOrchestrator();
+import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // Return health for all agents

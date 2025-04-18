@@ -1,5 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseClient: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 import { downloadTelegramFile, uploadToSupabaseStorage } from '../../utils/telegram/file';
 import { transcribeVoiceWhisper } from '../../utils/telegram/transcription';
 import { callOpenAIGPT } from '../../utils/telegram/openai';
@@ -12,23 +17,9 @@ const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 async function sendTelegramMessage(chat_id: number | string, text: string) {
   await axios.post(`${TELEGRAM_API}/sendMessage`, { chat_id, text });
 }
-    {
-      model: 'gpt-4o-mini',
-      messages: formattedMessages,
-      max_tokens: 1024,
-      temperature: 0.7,
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    }
-  ) as { data: { choices: { message: { content: string } }[] } };
-  return response.data.choices[0].message.content.trim();
-}
+
 // Main handler
-export default async function handler(req: NextApiRequest, res: NextApiResponse, supabaseClient = supabase) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse, client: SupabaseClient = supabaseClient) {
   if (req.method !== 'POST') return res.status(405).end();
   let body = req.body;
   if (typeof body === 'string') {
@@ -60,6 +51,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse,
     if (message.text) {
       message_type = 'text';
       content = message.text;
+      // Feature request detection (simple heuristic)
+      const featureRequestPattern = /^(build|create|deploy|start|launch)\b/i;
+      if (featureRequestPattern.test(content.trim())) {
+        // Trigger agent creation via orchestrator
+        try {
+          const { orchestrator } = require('../../src/orchestration/orchestratorSingleton');
+          const { v4: uuidv4 } = require('uuid');
+          const agentId = uuidv4();
+          const agentConfig = {
+            id: agentId,
+            type: 'telegram',
+            status: 'pending',
+            host: 'local',
+            config: { description: content }
+          };
+          orchestrator.launchAgent(agentConfig).then((agent: any) => {
+            sendTelegramMessage(chat_id, `✅ Agent created!\nID: ${agent.id}\nStatus: ${agent.status}`);
+          }).catch((err: any) => {
+            sendTelegramMessage(chat_id, `❌ Failed to create agent: ${err.message || err}`);
+          });
+          // Optionally, inform the user immediately
+          await sendTelegramMessage(chat_id, 'Your agent is being created. You will receive an update shortly.');
+          return res.status(200).json({ ok: true, message: 'Agent creation triggered' });
+        } catch (err: any) {
+          await sendTelegramMessage(chat_id, `❌ Internal error during agent creation: ${err.message || err}`);
+          return res.status(500).json({ ok: false, error: err.message || err });
+        }
+      }
     }
     // 2. Image (photo)
     else if (message.photo) {

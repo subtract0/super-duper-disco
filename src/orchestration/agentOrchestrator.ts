@@ -36,6 +36,10 @@ export type SwarmState = {
  */
 import { agentLogStore } from './agentLogs';
 import { agentHealthStore, AgentHealthStatus } from './agentHealth';
+import { agentManager } from './agentManager';
+import { logAgentHealthToSupabase } from './supabaseAgentOps';
+
+import { QCAgent } from './agents/qcAgent';
 
 export class AgentOrchestrator {
   private recoveryAttempts: Record<string, number> = {};
@@ -46,6 +50,11 @@ export class AgentOrchestrator {
    * In-memory list of orchestrated agents. In production, this should be backed by a DB or distributed store.
    */
   private agents: OrchestratedAgent[] = [];
+
+  /**
+   * In-memory agent health/activity map (mirrors AgentManager)
+   */
+  private agentHealthMap: Record<string, { lastHeartbeat?: number; lastActivity?: number; crashCount?: number }> = {};
 
   /**
    * In-memory message bus for agent-to-agent communication (stub for swarm/autogen/LangChain integration)
@@ -80,8 +89,16 @@ export class AgentOrchestrator {
    * Get the full swarm state (agents + messages)
    */
   getSwarmState(): SwarmState {
+    // Enrich agents with health/activity
+    const { agentManager } = require('./agentManager');
+    const agentsWithHealth = this.agents.map(agent => ({
+      ...agent,
+      lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
+      lastActivity: agentManager.getAgentLastActivity(agent.id),
+      health: agentManager.getAgentHealth(agent.id),
+    }));
     return {
-      agents: [...this.agents],
+      agents: agentsWithHealth,
       messages: [...this.messageBus],
     };
   }
@@ -91,23 +108,62 @@ export class AgentOrchestrator {
     // Auto-recovery: subscribe to health changes
     const debounce: Record<string, NodeJS.Timeout> = {};
     agentHealthStore.onStatusChange(async (agentId, status) => {
+    console.log(`[ORCH][DEBUG] onStatusChange event: ${agentId} -> ${status}`);
       if (status === 'crashed') {
         console.log(`[ORCH] Auto-recovery triggered for ${agentId}`);
         if (debounce[agentId]) clearTimeout(debounce[agentId]);
         debounce[agentId] = setTimeout(async () => {
-          // Only auto-recover if agent still exists and is crashed
-          if (this.getAgent(agentId) && agentHealthStore.getHealth(agentId) === 'crashed') {
-            agentLogStore.addLog({
-              agentId,
-              timestamp: Date.now(),
-              level: 'warn',
-              message: `Auto-recovery triggered for crashed agent`,
-            });
-            await this.restartAgent(agentId);
-          }
-        }, 1000); // 1s debounce for demo
+        console.log(`[ORCH][DEBUG] Debounce timer fired for ${agentId}`);
+        // Only auto-recover if agent still exists and is crashed
+        if (this.getAgent(agentId) && agentHealthStore.getHealth(agentId) === 'crashed') {
+          agentLogStore.addLog({
+            agentId,
+            timestamp: Date.now(),
+            level: 'warn',
+            message: `Auto-recovery triggered for crashed agent`,
+          });
+          await this.restartAgent(agentId);
+        }
+      }, 1000); // 1s debounce for demo
       }
     });
+  }
+
+  /**
+   * Launch a Quality Control Agent (QC Agent) for reviewing implementations.
+   * @param id QC Agent ID
+   * @param openAIApiKey API key for LLM
+   */
+  async launchQCAgent(id: string, openAIApiKey: string): Promise<QCAgent> {
+    const qcAgent = new QCAgent(id, openAIApiKey);
+    // Optionally add to orchestrator's agents list for monitoring
+    this.agents.push({
+      id,
+      type: 'qc',
+      status: 'healthy',
+      host: 'local',
+      config: { openAIApiKey }
+    });
+    agentLogStore.addLog({
+      agentId: id,
+      timestamp: Date.now(),
+      level: 'info',
+      message: `QC Agent launched: ${id}`,
+    });
+    return qcAgent;
+  }
+
+  /**
+   * Review a developer's implementation for a ticket using the QC Agent.
+   * @param ticket Ticket description
+   * @param implementation Developer's implementation
+   * @param openAIApiKey API key for LLM
+   * @returns QC Agent's review result
+   */
+  async reviewWithQC(ticket: string, implementation: string, openAIApiKey: string): Promise<string> {
+    const qcAgent = await this.launchQCAgent(`qc-${Date.now()}`, openAIApiKey);
+    const review = await qcAgent.reviewImplementation(ticket, implementation);
+    return review;
   }
 
   /**
@@ -116,26 +172,31 @@ export class AgentOrchestrator {
    * @returns The launched agent (with updated status)
    */
   async launchAgent(agentConfig: OrchestratedAgent): Promise<OrchestratedAgent> {
-    // Simulate agent launch (future: spawn process, container, etc.)
-    const launched: OrchestratedAgent = { ...agentConfig, status: 'healthy' };
-    this.agents.push(launched);
-    // Add to persistent store
-    try {
-      const { getAgents, saveAgents } = require('../../../__mocks__/persistentStore');
-      const agents = getAgents();
-      if (!agents.find((a: any) => a.id === launched.id)) {
-        agents.push({ ...launched });
-        saveAgents(agents);
-      }
-    } catch (e) { /* ignore in prod */ }
+    // Use agentManager.deployAgent for real agent process
+    const { agentManager } = require('./agentManager');
+    agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
+    const agentHealth = {
+      lastHeartbeat: agentManager.getAgentLastHeartbeat(agentConfig.id),
+      lastActivity: agentManager.getAgentLastActivity(agentConfig.id),
+      crashCount: 0,
+    };
+    this.agentHealthMap[agentConfig.id] = agentHealth;
+    const agent: OrchestratedAgent = {
+      ...agentConfig,
+      status: 'healthy',
+      host: 'local',
+    };
+    this.agents.push(agent);
+    const logMsg = `Agent launched: ${agent.id}`;
     agentLogStore.addLog({
-      agentId: launched.id,
+      agentId: agent.id,
       timestamp: Date.now(),
       level: 'info',
-      message: `Agent launched (type: ${launched.type}, host: ${launched.host})`,
+      message: logMsg,
     });
-    agentHealthStore.setHealth(launched.id, 'healthy');
-    return launched;
+    // Persist to Supabase
+    logAgentHealthToSupabase(agent.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
+    return agent;
   }
 
   /**
@@ -144,28 +205,30 @@ export class AgentOrchestrator {
    */
   async stopAgent(agentId: string): Promise<void> {
     this.recoveryAttempts[agentId] = 0;
-
-    // Simulate stop (future: send kill signal, etc.)
-    // Instead of removing, mark as crashed
+    // Stop the real agent process
+    agentManager.stopAgent(agentId);
+    // Mark as crashed for compatibility
     const agent = this.getAgent(agentId);
     if (agent) {
       agent.status = 'crashed';
+      // Do NOT remove agent from orchestrator's agent list; keep it for status tracking
     }
-    // Optionally: Remove from persistent store if needed (for demo, keep in memory)
+    const logMsg = `Agent stopped`;
     agentLogStore.addLog({
       agentId,
       timestamp: Date.now(),
       level: 'info',
-      message: `Agent stopped`,
+      message: logMsg,
     });
+    logAgentHealthToSupabase(agentId, 'crashed', logMsg, 'info', { event: 'stopAgent' });
     agentHealthStore.setHealth(agentId, 'crashed');
   }
-
 
   /**
    * Restart an agent if crashed, with retry logic. Sets health to 'restarting' and then 'recovered' or 'recovery_failed'.
    */
   async restartAgent(agentId: string): Promise<'recovered' | 'recovery_failed'> {
+    console.log(`[ORCH][DEBUG] restartAgent called for ${agentId}`);
     console.log(`[ORCH] restartAgent called for ${agentId}`);
     const agent = this.getAgent(agentId);
     if (!agent) {
@@ -178,6 +241,7 @@ export class AgentOrchestrator {
     }
     agentHealthStore.setHealth(agentId, 'restarting');
     console.log(`[ORCH] restartAgent: set health to restarting for ${agentId}`);
+    logAgentHealthToSupabase(agentId, 'restarting', 'Restarting agent', 'warn', { event: 'restartAgent' });
     // Simulate recovery delay
     await new Promise(res => setTimeout(res, this.recoveryCooldownMs));
     // Recovery logic...
@@ -185,23 +249,29 @@ export class AgentOrchestrator {
     this.recoveryAttempts[agentId]++;
     if (this.recoveryAttempts[agentId] > this.maxRecoveryAttempts) {
       agentHealthStore.setHealth(agentId, 'recovery_failed');
+      console.log(`[ORCH][DEBUG] Health set to recovery_failed for ${agentId}`);
+      const failMsg = `Recovery failed after max attempts`;
       agentLogStore.addLog({
         agentId,
         timestamp: Date.now(),
         level: 'error',
-        message: `Recovery failed after max attempts`,
+        message: failMsg,
       });
+      logAgentHealthToSupabase(agentId, 'recovery_failed', failMsg, 'error', { event: 'restartAgent' });
       console.log(`[ORCH] restartAgent: recovery failed for ${agentId}`);
       return 'recovery_failed';
     }
     // Simulate successful recovery
     agentHealthStore.setHealth(agentId, 'recovered');
+    console.log(`[ORCH][DEBUG] Health set to recovered for ${agentId}`);
+    const okMsg = `Agent recovered successfully`;
     agentLogStore.addLog({
       agentId,
       timestamp: Date.now(),
       level: 'info',
-      message: `Agent recovered successfully`,
+      message: okMsg,
     });
+    logAgentHealthToSupabase(agentId, 'recovered', okMsg, 'info', { event: 'restartAgent' });
     console.log(`[ORCH] restartAgent: recovery succeeded for ${agentId}`);
     return 'recovered';
   }
@@ -221,6 +291,10 @@ export class AgentOrchestrator {
    * @returns The agent's health status
    */
   getHealth(agentId: string): AgentHealthStatus {
+    // Prefer live agentManager status if available
+    const info = agentManager.listAgents().find(a => a.id === agentId);
+    if (info && info.status === 'running') return 'healthy';
+    if (info && info.status === 'stopped') return 'crashed';
     return agentHealthStore.getHealth(agentId);
   }
 
@@ -229,6 +303,25 @@ export class AgentOrchestrator {
    * @returns Array of OrchestratedAgent
    */
   listAgents(): OrchestratedAgent[] {
-    return [...this.agents];
+    const { agentManager } = require('./agentManager');
+    return this.agents.map(agent => ({
+      ...agent,
+      lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
+      lastActivity: agentManager.getAgentLastActivity(agent.id),
+      health: agentManager.getAgentHealth(agent.id),
+    }));
+  }
+
+  /**
+   * Reset orchestrator state for test isolation.
+   * Clears all agents, health/activity maps, and message bus.
+   */
+  reset() {
+    const { agentManager } = require('./agentManager');
+    agentManager.clearAllAgents();
+    this.agents = [];
+    this.agentHealthMap = {};
+    this.messageBus = [];
+    this.recoveryAttempts = {};
   }
 }

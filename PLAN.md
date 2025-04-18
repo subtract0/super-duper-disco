@@ -4,56 +4,171 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
 
 ---
 
-## Backlog Tickets
+## Completed Tickets
 
-### 1. Core Test: Text Message Flow
+### 1. Core Test: Text Message Flow ✔️
 - **Objective:** Ensure a text message sent to Telegram is processed, stored in Supabase, and replied to by the agent.
-- **Acceptance Criteria:**
-  - Text message is received and saved in Supabase
-  - Agent reply is generated via OpenAI and sent back to Telegram
-  - Test passes with mocked Telegram and OpenAI APIs
-- **Recommended Approach:**
-  - Write an integration test for the `/api/telegram` endpoint using mocked dependencies
+- **Status:** ✔️ Completed (tests and code exist and pass)
 
-### 2. Core Test: File Upload Flow
+### 2. Core Test: File Upload Flow ✔️
 - **Objective:** Verify images/documents from Telegram are downloaded, uploaded to Supabase, and URLs are stored.
-- **Acceptance Criteria:**
-  - File is received, uploaded to Supabase Storage
-  - URL is saved in Supabase messages
-  - Test passes with mocked file and Supabase APIs
-- **Recommended Approach:**
-  - Add a test with a sample image/document message and validate storage logic
+- **Status:** ✔️ Completed (tests and code exist and pass)
 
-### 3. Core Test: Voice Transcription Flow
+### 3. Core Test: Voice Transcription Flow ✔️
 - **Objective:** Confirm a voice message is transcribed using Whisper and the result is processed and replied to.
-- **Acceptance Criteria:**
-  - Voice message is received, transcribed, and stored
-  - Agent reply is generated and sent
-  - Test passes with mocked Whisper and OpenAI APIs
-- **Recommended Approach:**
-  - Add a test for voice message handling with transcription mocking
+- **Status:** ✔️ Completed (tests and code exist and pass)
 
-### 4. Core Test: OpenAI Integration
+### 4. Core Test: OpenAI Integration ✔️
 - **Objective:** Ensure agent replies are generated and saved using OpenAI (mocked responses).
-- **Acceptance Criteria:**
-  - OpenAI API is called with correct payload
-  - Agent reply is saved and sent
-  - Test passes with OpenAI mocked
-- **Recommended Approach:**
-  - Unit test for the `callOpenAIGPT` helper with mocked axios/OpenAI
+- **Status:** ✔️ Completed (tests and code exist and pass)
 
-### 5. Core Test: Error Handling
+### 5. Core Test: Error Handling ✔️
 - **Objective:** Simulate failures (Supabase/OpenAI down) and verify error logging and user notification.
-- **Acceptance Criteria:**
-  - Errors are logged
-  - User receives a helpful error message via Telegram
-  - Test passes for both Supabase and OpenAI failures
-- **Recommended Approach:**
-  - Integration tests with forced errors and assertion on user notification (**in progress**)
+- **Status:** ✔️ Completed (tests and code exist and pass)
 
 ---
 
-### Current Tasks
+### Failsafe Notation
+If any regression or failure is detected in the above completed tickets, immediately halt further development, open a critical issue, and prioritize fixing the regression before proceeding.
+
+---
+
+# Conversational Agent Builder Roadmap
+
+## Vision
+Enable users to describe a feature to a Telegram bot, which triggers a multi-agent system to build, test, review, and deploy agents on demand, with oversight and quality control, all orchestrated and deployed remotely/serverless.
+
+The framework must also learn persistently from its interactions and project work: it should save important learnings, pitfalls, and operational context (such as OS quirks, PowerShell/Windows specifics, and other environment-dependent knowledge) to Supabase as a persistent memory. This memory should be accessible across all deployments and sessions, enabling the system to improve, adapt, and share context no matter where it is run from.
+
+## Milestones & Tasks
+
+### 1. Multi-Agent Orchestration Foundation
+- **Objective:** Refactor and extend the Agent Manager and Orchestrator for dynamic, in-memory agent lifecycle management and health monitoring.
+- **Acceptance Criteria:**
+  - Agents can be launched, stopped, monitored, and auto-recovered
+  - Health status, logs, and live state are accessible via API/dashboard
+  - Modular support for native, LangChain, and AutoGen agents
+- **Steps:**
+  - Audit and refactor `src/orchestration/agentManager.ts` and `agentOrchestrator.ts`
+  - Implement in-memory health store, heartbeats, and auto-restart
+  - Add/extend API endpoints and dashboard for live state
+
+### 2. Telegram Bot Conversational Interface
+- **Objective:** Upgrade `/api/telegram` endpoint and bot logic to accept natural language feature requests and route them to the orchestration system.
+- **Acceptance Criteria:**
+  - Telegram bot receives feature requests and parses intent
+  - LLM-powered parser generates actionable agent creation tickets
+  - User receives status updates and deployment links via Telegram
+- **Steps:**
+  - Integrate LLM (e.g., OpenAI) for intent extraction
+  - Connect Telegram endpoint to orchestration API
+  - Implement status and error feedback loop to user
+
+### 3. On-Demand Agent Creation (Builder Agent)
+- **Objective:** Implement a Builder Agent that breaks down user feature requests into development tickets, triggers agent creation, and coordinates the build pipeline.
+- **Acceptance Criteria:**
+  - Builder Agent receives parsed requests and creates tickets
+  - Tickets are processed according to the Cascade Protocol
+  - New agents are automatically built, tested, and deployed
+- **Steps:**
+  - Implement Builder Agent logic and ticket creation
+  - Integrate with Orchestrator and Agent Manager
+  - Ensure ticket traceability and test coverage
+
+### 4. Quality Control Agent (QC Agent)
+- **Objective:** Implement a QC Agent that reviews agent outputs, test results, and code quality before deployment.
+- **Acceptance Criteria:**
+  - QC Agent runs automated tests and acceptance checks
+  - Can halt or roll back deployment on failure
+  - Provides feedback and status to user and orchestrator
+- **Steps:**
+  - Implement QC Agent logic and hooks
+  - Integrate with Builder Agent and Orchestrator
+  - Add notification and rollback mechanisms
+
+### 5. Automated Deployment & Feedback
+- **Objective:** Seamlessly deploy new/updated agents to Vercel/serverless or remote Docker, with robust feedback to users and dashboard.
+- **Acceptance Criteria:**
+  - Agents are deployed remotely/serverless on completion
+  - User receives deployment status and links via Telegram
+  - Dashboard/API reflects deployed agents and health
+- **Steps:**
+  - Integrate deployment pipeline with Vercel/serverless
+  - Sync deployment status to dashboard and Telegram
+  - Add failsafe and rollback for failed deployments
+
+### 6. Continuous Improvement & Extensibility
+- **Objective:** Ensure the system is modular, secure, and easy to extend with new agent types, workflows, or integrations.
+- **Acceptance Criteria:**
+  - New agent types and workflows can be added with minimal code changes
+  - Security, logging, and permissioning are robust
+  - Regression/failure triggers critical alert and halts pipeline
+- **Steps:**
+  - Refactor for modularity and plug-in support
+  - Implement logging, permission checks, and regression alerts
+  - Document extension and integration process
+
+---
+
+## Next Steps
+- Begin with Milestone 1: Audit and extend orchestration code for dynamic agent management.
+- Proceed stepwise through each milestone, following the Cascade Autonomous Development Protocol for ticketing, testing, and deployment.
+
+---
+
+## Planned Modularization: Telegram API Handler
+
+---
+
+## Appendix: Agent Broker & Swarm Roadmap
+
+---
+
+## Multi-Agent Orchestration: LangChain & AutoGen
+
+### Objective
+Design and implement a robust, production-grade multi-agent orchestration system where agents with different roles, tools, and memory can collaborate on complex tasks. Ensure high reliability (health monitoring, auto-recovery), extensibility (plug-in agent types), and support for advanced LLM workflows.
+
+### Milestones
+1. **Agent Lifecycle Management**
+   - Launch, stop, restart agents as processes
+   - Monitor health (pending, healthy, crashed, restarting)
+   - Auto-recovery for crashed agents
+2. **Agent Types & Integration**
+   - Native agents (custom logic)
+   - LangChain agents (LLM, tools, memory)
+   - AutoGen agents (multi-agent conversation, team coordination)
+   - Hybrid agents (LangChain-powered brains inside AutoGen agents)
+3. **Multi-Agent Workflow**
+   - Role-based agents (Planner, Researcher, Coder, etc.)
+   - Each agent tracks its own conversation history (memory)
+   - Agents can use tools/APIs/code
+   - Round-robin or protocol-driven collaboration
+   - Task decomposition and delegation
+4. **Health & Reliability**
+   - In-memory health store
+   - Heartbeats and health checks
+   - Auto-restart on crash
+   - Dashboard/API reflect live state
+5. **Extensibility**
+   - Plug-and-play agent types
+   - Add new roles, tools, or workflows easily
+   - Support both single-agent and multi-agent scenarios
+
+### Acceptance Criteria
+- Agents of different types (native, LangChain, AutoGen) can be launched, stopped, and monitored
+- Health status is tracked and auto-recovery is triggered on crash
+- Agents can collaborate on a task, passing messages with role/context awareness
+- System supports extension with new agent types, tools, and workflows
+- Comprehensive tests cover agent lifecycle, health, and collaboration
+
+### Recommended Technical Approach
+- Use Node.js + TypeScript for orchestration and agent management
+- Implement agent classes for each type; use LangChain for LLM/tool/memory, AutoGen for multi-agent protocols
+- Orchestrator manages process lifecycle, health, and recovery
+- Agents communicate via message passing, with role/context prompts and memory
+- Add APIs and dashboard to reflect live agent state and logs
+- Write integration tests for all critical flows
 
 ---
 

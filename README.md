@@ -4,6 +4,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Personal Website
 
+---
+
+**Design Reference:**
+See [`docs/multi_agent_cascade_protocol_design.md`](docs/multi_agent_cascade_protocol_design.md) for the full multi-agent Cascade protocol design, agent roles, and orchestration workflow. This is the canonical reference for architecture and implementation.
+
 A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, Whisper) integrations.
 
 ---

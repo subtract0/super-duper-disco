@@ -2,32 +2,46 @@ import type { NextApiRequest, NextApiResponse } from "next";
 
 import { getAgents, saveAgents } from '../../../__mocks__/persistentStore';
 import { v4 as uuidv4 } from 'uuid';
-import { AgentOrchestrator } from '../../../src/orchestration/agentOrchestrator';
-
-// Singleton orchestrator instance (will be used for all agent ops)
-export const orchestrator = new AgentOrchestrator();
+import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
-    // List all agents from persistent store
-    const agents = getAgents();
-    res.status(200).json({ agents });
+    // List all agents from orchestrator (live state), robustly
+    try {
+      const agents = orchestrator.listAgents();
+      // Dynamically require agentManager to avoid circular deps
+      const { agentManager } = require('../../../src/orchestration/agentManager');
+      const detailedAgents = agents.map(agent => {
+        let health: string = 'unknown';
+        let error: string | undefined = undefined;
+        let logs: string[] = [];
+        let lastHeartbeat: number | null = null;
+        let lastActivity: number | null = null;
+        try {
+          health = orchestrator.getHealth(agent.id);
+          logs = agentManager.getAgentLogs(agent.id);
+          lastHeartbeat = agentManager.getAgentLastHeartbeat(agent.id);
+          lastActivity = agentManager.getAgentLastActivity(agent.id);
+        } catch (e: any) {
+          error = 'Failed to fetch health/logs: ' + (e?.message || e);
+        }
+        return { ...agent, health, logs, lastHeartbeat, lastActivity, ...(error ? { error } : {}) };
+      });
+      res.status(200).json({ agents: detailedAgents });
+    } catch (e: any) {
+      res.status(500).json({ error: 'Failed to list agents', detail: e?.message || e });
+    }
   } else if (req.method === "POST") {
-    // Add (deploy) a new agent to persistent store
-    const agents = getAgents();
-    let newAgent: any = {
+    // Deploy a new agent via orchestrator
+    const newAgent = {
       id: uuidv4(),
       type: req.body.type,
-      status: 'pending',
+      status: 'pending' as const,
       host: req.body.host,
       config: req.body.config || {},
     };
-    // Simulate orchestration/launch
-    await orchestrator.launchAgent({ ...newAgent, status: 'pending' });
-    newAgent = { ...newAgent, status: 'healthy' };
-    agents.push(newAgent);
-    saveAgents(agents);
-    res.status(201).json({ ok: true, agent: newAgent });
+    const launched = await orchestrator.launchAgent(newAgent);
+    res.status(201).json({ ok: true, agent: launched });
   } else {
     res.status(405).end();
   }

@@ -3,6 +3,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { AgentOrchestrator, OrchestratedAgent } from './agentOrchestrator';
 import { agentHistoryStore } from './agentHistory';
+import { fetchAgentCards, insertAgentCard, updateEloForCardSet, AgentIdeaCard as PersistentAgentIdeaCard } from './supabaseAgentCards';
 
 export type AgentIdeaCard = {
   id: string;
@@ -10,6 +11,10 @@ export type AgentIdeaCard = {
   description: string;
   image: string;
   config: Record<string, any>;
+  elo?: number;
+  times_shown?: number;
+  times_picked?: number;
+  created_at?: string;
 };
 
 import fs from 'fs';
@@ -79,24 +84,44 @@ async function fetchAgentIdeasFromLLM(n: number = 3): Promise<AgentIdeaCard[]> {
   }
 }
 
+// Persistent smart agent idea fetcher with ELO and learning
 export async function smartAgentIdeas(n: number = 3): Promise<AgentIdeaCard[]> {
-  if (cachedIdeas) return cachedIdeas;
-  const llmIdeas = await fetchAgentIdeasFromLLM(n);
-  if (llmIdeas.length > 0) {
-    cachedIdeas = llmIdeas;
-    return llmIdeas;
-  }
-  // fallback
-  return Array.from({ length: n }, (_, i) => {
-    const idea = staticIdeas[Math.floor(Math.random() * staticIdeas.length)];
-    return {
-      id: uuidv4(),
+  let persistentCards = await fetchAgentCards(n - 1); // fetch n-1 best cards
+  // Map to UI AgentIdeaCard format (add config)
+  let cards: AgentIdeaCard[] = persistentCards.map(card => ({
+    ...card,
+    config: { type: card.type }
+  }));
+  // Always add at least one new card per shuffle
+  const newIdeas = await fetchAgentIdeasFromLLM(1);
+  if (newIdeas.length > 0) {
+    const idea = newIdeas[0];
+    // Insert into Supabase and get the real card (with id, elo, etc)
+    const newCard = await insertAgentCard({
       name: idea.name,
       description: idea.description,
-      ...randomCardArt(),
-      config: idea.config,
+      image: idea.image,
+      type: idea.config.type
+    });
+    cards.push({ ...newCard, config: { type: newCard.type } });
+  }
+  // If not enough cards, fill with static
+  while (cards.length < n) {
+    const fallback = {
+      name: 'Fallback Agent',
+      description: 'A fallback agent card.',
+      image: '/card-art-fallback.png',
+      type: 'fallback-' + Math.random().toString(36).substring(2, 8)
     };
-  });
+    const inserted = await insertAgentCard(fallback);
+    cards.push({ ...inserted, config: { type: inserted.type } });
+  }
+  // Shuffle cards for randomness
+  for (let i = cards.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [cards[i], cards[j]] = [cards[j], cards[i]];
+  }
+  return cards.slice(0, n);
 }
 
 // Stub: feedback loop for user like/dislike (to be implemented in UI)
@@ -137,4 +162,11 @@ export class AgentBroker {
   getDeploymentHistory(limit: number = 20) {
     return agentHistoryStore.getDeployments(limit);
   }
+
+  // ELO learning: update ELO for picked and unpicked cards
+  async updateEloLearning(pickedId: string, shownIds: string[]): Promise<void> {
+    if (!pickedId || !shownIds || shownIds.length === 0) return;
+    await updateEloForCardSet(pickedId, shownIds);
+  }
 }
+

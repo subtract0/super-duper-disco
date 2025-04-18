@@ -17,6 +17,19 @@ create table if not exists companies (
     created_at timestamptz default now()
 );
 
+-- 5. Agent Idea Cards Table
+create table if not exists agent_idea_cards (
+    id uuid primary key default gen_random_uuid(),
+    name text not null,
+    description text not null,
+    image text,
+    type text unique not null,
+    elo integer not null default 1000,
+    times_shown integer not null default 0,
+    times_picked integer not null default 0,
+    created_at timestamptz default now()
+);
+
 -- 4. RLS Policies
 -- Enable RLS
 alter table profiles enable row level security;
@@ -46,6 +59,16 @@ create table if not exists messages (
     message_type text not null,      -- 'text', 'image', 'voice', 'document'
     content text,                    -- text, transcription, or file URL
     file_name text,                  -- original file name (if applicable)
+);
+
+-- 6. Persistent Memory Table for Learnings & Environment Context
+create table if not exists persistent_memory (
+    id uuid primary key default uuid_generate_v4(),
+    type text not null, -- e.g. 'learning', 'pitfall', 'env', etc.
+    content text not null,
+    tags text[],
+    created_at timestamptz default now()
+);
     file_size bigint,                -- file size in bytes (if applicable)
     mime_type text,                  -- MIME type (if applicable)
     telegram_message_id bigint,      -- optional: for referencing the original Telegram message

@@ -12,6 +12,34 @@ HandwerkerPro is a modern, production-ready Next.js application for managing cra
 
 ---
 
+## Tech Stack
+
+### Backend / Orchestration
+- **Node.js** with **TypeScript**: Main language for orchestration, agent management, and API logic.
+- **In-memory singletons** for agent health, logs, and state (e.g., `agentManager`, `agentHealthStore`, `agentLogStore`).
+- **Custom agent orchestration**: Agents run as background processes managed by the orchestrator and agent manager, with live health and lifecycle tracking.
+- **API endpoints**: Implemented using Next.js API routes (e.g., `/api/agents`).
+
+### Testing
+- **Jest**: Primary test runner for both unit and integration tests.
+- **node-mocks-http**: For mocking HTTP requests/responses in API tests.
+- **Real and fake timers**: Used in orchestrator tests to simulate asynchronous agent recovery and lifecycle events.
+
+### Frontend
+- **React** (implied by `.tsx` test files and component structure).
+- **Next.js**: Used for API routes and likely for SSR/SSG of the frontend.
+- **Component tests**: Written for React components (e.g., `AgentRegistry.test.tsx`).
+
+### Utilities / Integration
+- **Supabase**: Used for some utility/database integration (`supabaseClient.ts`).
+- **Postman collection**: Provided for API onboarding and testing.
+- **PowerShell scripts**: For quickstart and setup tasks (`quickstart.ps1`).
+
+### Documentation
+- **Markdown docs**: `DOC.md` and inline documentation throughout the codebase.
+
+---
+
 ## File Structure
 
 ```
@@ -123,6 +151,7 @@ The dashboard provides:
     - Refresh the page if UI is stale
     - Check browser console and API server status for persistent errors
     - All errors are surfaced in the UI as toasts or messages
+    - If `/api/agents` hangs or fails to return, restart the dev server and check the terminal for errors. Inspect your agent orchestration code for infinite loops or blocking calls. The endpoint now returns partial results and error fields if any agent fails, so you should still see most agents even if some are broken.
 - The UI reflects all health states for maximum transparency and user trust.
 
 ---

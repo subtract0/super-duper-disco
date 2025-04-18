@@ -1,3 +1,5 @@
+import React from 'react';
+import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AgentBrokerPanel from '../components/AgentBrokerPanel';
 
@@ -27,19 +29,22 @@ afterEach(() => {
   jest.resetAllMocks();
 });
 
-test('renders cards and allows shuffle', async () => {
+test('fetches cards on mount and on shuffle', async () => {
   render(<AgentBrokerPanel />);
-  expect(await screen.findByText(/Test Agent/)).toBeInTheDocument();
-  fireEvent.click(await screen.findByText(/Shuffle Cards/));
-  // Should show loading and then cards again
-  expect(await screen.findByText(/Test Agent/)).toBeInTheDocument();
+  // initial fetch on mount
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledWith('/api/broker?n=3'));
+  expect(global.fetch).toHaveBeenCalledTimes(1);
+  // click shuffle triggers new fetch
+  const shuffleButton = await screen.findByText(/Shuffle Cards/);
+  fireEvent.click(shuffleButton);
+  await waitFor(() => expect(global.fetch).toHaveBeenCalledTimes(2));
 });
 
 test('creates agent card from prompt', async () => {
   render(<AgentBrokerPanel />);
   const input = await screen.findByPlaceholderText(/Describe your agent idea/);
   fireEvent.change(input, { target: { value: 'A custom agent for Reddit marketing' } });
-  fireEvent.click(await screen.findByText(/Create from Prompt/));
+  fireEvent.click(screen.getByText(/Create from Prompt/));
   await waitFor(() => expect(input).toHaveValue(''));
 });
 

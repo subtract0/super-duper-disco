@@ -6,25 +6,16 @@ This backlog is maintained according to the [Cascade Autonomous Development Prot
 
 ## Completed Tickets
 
-### 1. Core Test: Text Message Flow ✔️
-- **Objective:** Ensure a text message sent to Telegram is processed, stored in Supabase, and replied to by the agent.
-- **Status:** ✔️ Completed (tests and code exist and pass)
-
-### 2. Core Test: File Upload Flow ✔️
-- **Objective:** Verify images/documents from Telegram are downloaded, uploaded to Supabase, and URLs are stored.
-- **Status:** ✔️ Completed (tests and code exist and pass)
-
-### 3. Core Test: Voice Transcription Flow ✔️
-- **Objective:** Confirm a voice message is transcribed using Whisper and the result is processed and replied to.
-- **Status:** ✔️ Completed (tests and code exist and pass)
-
-### 4. Core Test: OpenAI Integration ✔️
-- **Objective:** Ensure agent replies are generated and saved using OpenAI (mocked responses).
-- **Status:** ✔️ Completed (tests and code exist and pass)
-
-### 5. Core Test: Error Handling ✔️
-- **Objective:** Simulate failures (Supabase/OpenAI down) and verify error logging and user notification.
-- **Status:** ✔️ Completed (tests and code exist and pass)
+- [x] **Core Test: Text Message Flow**
+  - Ensure a text message sent to Telegram is processed, stored in Supabase, and replied to by the agent.
+- [x] **Core Test: File Upload Flow**
+  - Verify images/documents from Telegram are downloaded, uploaded to Supabase, and URLs are stored.
+- [x] **Core Test: Voice Transcription Flow**
+  - Confirm a voice message is transcribed using Whisper and the result is processed and replied to.
+- [x] **Core Test: OpenAI Integration**
+  - Ensure agent replies are generated and saved using OpenAI (mocked responses).
+- [x] **Core Test: Error Handling**
+  - Simulate failures (Supabase/OpenAI down) and verify error logging and user notification.
 
 ---
 
@@ -43,62 +34,55 @@ The framework must also learn persistently from its interactions and project wor
 ## Milestones & Tasks
 
 ### 1. Multi-Agent Orchestration Foundation
-- **Objective:** Refactor and extend the Agent Manager and Orchestrator for dynamic, in-memory agent lifecycle management and health monitoring.
-- **Acceptance Criteria:**
-  - Agents can be launched, stopped, monitored, and auto-recovered
-  - Health status, logs, and live state are accessible via API/dashboard
-  - Modular support for native, LangChain, and AutoGen agents
-- **Steps:**
-  - Audit and refactor `src/orchestration/agentManager.ts` and `agentOrchestrator.ts`
-  - Implement in-memory health store, heartbeats, and auto-restart
-  - Add/extend API endpoints and dashboard for live state
+- [x] **Objective:** Refactor and extend the Agent Manager and Orchestrator for dynamic, in-memory agent lifecycle management and health monitoring.
+  - [x] Agents can be launched, stopped, monitored, and auto-recovered
+  - [x] Health status, logs, and live state are accessible via API/dashboard
+  - [ ] Modular support for native, LangChain, and AutoGen agents
+  - [x] Audit and refactor `src/orchestration/agentManager.ts` and `agentOrchestrator.ts`
+  - [x] Implement in-memory health store, heartbeats, and auto-restart
+  - [x] Add/extend API endpoints and dashboard for live state
+  - [ ] Tests for orchestrator-state endpoint & health flows
+  - [ ] Telegram commands: `/status`, `/stop <id>`, `/restart <id>`
 
 ### 2. Telegram Bot Conversational Interface
-- **Objective:** Upgrade `/api/telegram` endpoint and bot logic to accept natural language feature requests and route them to the orchestration system.
-- **Acceptance Criteria:**
-  - Telegram bot receives feature requests and parses intent
-  - LLM-powered parser generates actionable agent creation tickets
-  - User receives status updates and deployment links via Telegram
-- **Steps:**
-  - Integrate LLM (e.g., OpenAI) for intent extraction
-  - Connect Telegram endpoint to orchestration API
-  - Implement status and error feedback loop to user
+- [x] **Objective:** Upgrade `/api/telegram` endpoint and bot logic to accept natural language feature requests and route them to the orchestration system.
+  - [x] Telegram bot receives feature requests and parses intent
+  - [x] Regex-based parser generates actionable agent creation tickets
+  - [x] User receives status updates and deployment links via Telegram
+  - [x] Integrate OpenAI for response generation
+  - [x] Connect Telegram endpoint to orchestration API
+  - [x] Implement status and error feedback loop to user
+  - [ ] Tests covering `/status` & error flows
 
 ### 3. On-Demand Agent Creation (Builder Agent)
-- **Objective:** Implement a Builder Agent that breaks down user feature requests into development tickets, triggers agent creation, and coordinates the build pipeline.
-- **Acceptance Criteria:**
-  - Builder Agent receives parsed requests and creates tickets
-  - Tickets are processed according to the Cascade Protocol
-  - New agents are automatically built, tested, and deployed
-- **Steps:**
-  - Implement Builder Agent logic and ticket creation
-  - Integrate with Orchestrator and Agent Manager
-  - Ensure ticket traceability and test coverage
+- [ ] **Objective:** Implement a Builder Agent that breaks down user feature requests into development tickets, triggers agent creation, and coordinates the build pipeline.
+  - [ ] Builder Agent receives parsed requests and creates tickets
+  - [ ] Tickets are processed according to the Cascade Protocol
+  - [ ] New agents are automatically built, tested, and deployed
+  - [ ] Implement Builder Agent logic and ticket creation
+  - [ ] Integrate with Orchestrator and Agent Manager
+  - [ ] Ensure ticket traceability and test coverage
 
 ### 4. Quality Control Agent (QC Agent)
-- **Objective:** Implement a QC Agent that reviews agent outputs, test results, and code quality before deployment.
-- **Acceptance Criteria:**
-  - QC Agent runs automated tests and acceptance checks
-  - Can halt or roll back deployment on failure
-  - Provides feedback and status to user and orchestrator
-- **Steps:**
-  - Implement QC Agent logic and hooks
-  - Integrate with Builder Agent and Orchestrator
-  - Add notification and rollback mechanisms
+- [ ] **Objective:** Implement a QC Agent that reviews agent outputs, test results, and code quality before deployment.
+  - [ ] QC Agent runs automated tests and acceptance checks
+  - [ ] Can halt or roll back deployment on failure
+  - [ ] Provides feedback and status to user and orchestrator
+  - [ ] Implement QC Agent logic and hooks
+  - [ ] Integrate with Builder Agent and Orchestrator
+  - [ ] Add notification and rollback mechanisms
 
 ### 5. Automated Deployment & Feedback
-- **Objective:** Seamlessly deploy new/updated agents to Vercel/serverless or remote Docker, with robust feedback to users and dashboard.
-- **Acceptance Criteria:**
-  - Agents are deployed remotely/serverless on completion
-  - User receives deployment status and links via Telegram
-  - Dashboard/API reflects deployed agents and health
-- **Steps:**
-  - Integrate deployment pipeline with Vercel/serverless
-  - Sync deployment status to dashboard and Telegram
-  - Add failsafe and rollback for failed deployments
+- [ ] **Objective:** Seamlessly deploy new/updated agents to Vercel/serverless or remote Docker, with robust feedback to users and dashboard.
+  - [ ] Agents are deployed remotely/serverless on completion
+  - [ ] User receives deployment status and links via Telegram
+  - [ ] Dashboard/API reflects deployed agents and health
+  - [ ] Integrate deployment pipeline with Vercel/serverless
+  - [ ] Sync deployment status to dashboard and Telegram
+  - [ ] Add failsafe and rollback for failed deployments
 
 ### 6. Continuous Improvement & Extensibility
-- **Objective:** Ensure the system is modular, secure, and easy to extend with new agent types, workflows, or integrations.
+- [ ] **Objective:** Ensure the system is modular, secure, and easy to extend with new agent types, workflows, or integrations.
 - **Acceptance Criteria:**
   - New agent types and workflows can be added with minimal code changes
   - Security, logging, and permissioning are robust

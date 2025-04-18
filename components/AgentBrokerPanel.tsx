@@ -21,8 +21,6 @@ export default function AgentBrokerPanel() {
     // Clear cards to force visual refresh
     setCards([]);
     try {
-      // Wait a short moment for visual feedback
-      await new Promise(res => setTimeout(res, 300));
       const res = await fetch("/api/broker?n=3");
       const data = await res.json();
       if (!res.ok) {

@@ -40,6 +40,7 @@ import { agentManager } from './agentManager';
 import { logAgentHealthToSupabase } from './supabaseAgentOps';
 
 import { QCAgent } from './agents/qcAgent';
+import { BuilderAgent } from './agents/builderAgent';
 
 export class AgentOrchestrator {
   private agents: OrchestratedAgent[] = []; // Always initialize as empty array
@@ -160,6 +161,23 @@ export class AgentOrchestrator {
     const qcAgent = await this.launchQCAgent(`qc-${Date.now()}`, openAIApiKey);
     const review = await qcAgent.reviewImplementation(ticket, implementation);
     return review;
+  }
+
+  /**
+   * Break down a feature request into development tickets using BuilderAgent.
+   * @param request The user's feature request
+   * @returns Array of ticket descriptions
+   */
+  async buildTickets(request: string): Promise<string[]> {
+    const builder = new BuilderAgent(`builder-${Date.now()}`);
+    const tickets = await builder.receiveRequest(request);
+    agentLogStore.addLog({
+      agentId: builder.id,
+      timestamp: Date.now(),
+      level: 'info',
+      message: `Builder processed request`,
+    });
+    return tickets;
   }
 
   /**

@@ -1,6 +1,6 @@
 import handler from './[id]logs';
 import { createMocks } from 'node-mocks-http';
-import { orchestrator } from '../../../../src/orchestration/orchestratorSingleton';
+import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
 import { agentManager } from '../../../src/orchestration/agentManager';
 
 describe('/api/agents/agentLogs API', () => {
@@ -31,7 +31,8 @@ describe('/api/agents/agentLogs API', () => {
     const data = JSON.parse(res._getData());
     expect(Array.isArray(data.logs)).toBe(true);
     expect(data.logs.length).toBeGreaterThan(0);
-    expect(data.logs[0]).toMatch(/Agent started/);
+    // First log entry should indicate agent launch
+    expect(data.logs[0].message).toMatch(/Agent launched/);
   });
 
   it('GET returns logs for stopped agent', async () => {

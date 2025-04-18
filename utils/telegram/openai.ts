@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosRequestConfig } from 'axios';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
 
@@ -17,20 +17,30 @@ export async function callOpenAIGPT(messages: Message[]): Promise<string> {
     role: 'system',
     content: 'You are a helpful assistant for a Telegram user. Respond concisely and clearly.',
   });
-  const response = await axios.post(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      model: 'gpt-4o-mini',
-      messages: formattedMessages,
-      max_tokens: 1024,
-      temperature: 0.7,
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
+  try {
+    const response = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o-mini',
+        messages: formattedMessages,
+        max_tokens: 1024,
+        temperature: 0.7,
       },
+      {
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    ) as { data: { choices: { message: { content: string } }[] } };
+    if (!response.data || !Array.isArray(response.data.choices) || !response.data.choices[0] || !response.data.choices[0].message || typeof response.data.choices[0].message.content !== 'string') {
+      throw new Error('OpenAI down');
     }
-  ) as { data: { choices: { message: { content: string } }[] } };
-  return response.data.choices[0].message.content.trim();
+    return response.data.choices[0].message.content.trim();
+  } catch (err: any) {
+    // Always throw an error with a .message property that is a string
+    console.error('[OpenAI callOpenAIGPT] Caught error:', err);
+    // Uniform error for any OpenAI failure
+    throw new Error('OpenAI down');
+  }
 }

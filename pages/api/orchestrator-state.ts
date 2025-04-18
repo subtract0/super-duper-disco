@@ -8,7 +8,7 @@ export default function handler(req: any, res: any) {
   const health: Record<string, any> = {};
   agents.forEach(agent => {
     health[agent.id] = {
-      status: agent.health,
+      status: agent.status,
       lastHeartbeat: agent.lastHeartbeat,
       lastActivity: agent.lastActivity
     };

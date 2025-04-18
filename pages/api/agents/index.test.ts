@@ -1,5 +1,11 @@
+jest.mock('../../../src/orchestration/supabaseAgentOps', () => ({
+  logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
+  fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
+}));
+
 import handler from './index';
 import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
+import { agentManager } from '../../../src/orchestration/agentManager';
 import { createMocks } from 'node-mocks-http';
 
 describe('/api/agents/index API', () => {
@@ -18,6 +24,10 @@ describe('/api/agents/index API', () => {
   }
 
   beforeEach(async () => {
+    // Extra: ensure agentManager is also reset
+    for (const agent of agentManager.listAgents()) {
+      await agentManager.stopAgent(agent.id);
+    }
     // eslint-disable-next-line no-console
     console.log('BeforeEach: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
     orchestrator.reset();
@@ -29,6 +39,9 @@ describe('/api/agents/index API', () => {
   });
 
   afterEach(async () => {
+    for (const agent of agentManager.listAgents()) {
+      await agentManager.stopAgent(agent.id);
+    }
     orchestrator.reset();
     // eslint-disable-next-line no-console
     console.log('AfterEach: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
@@ -90,39 +103,32 @@ describe('/api/agents/index API', () => {
 
     
   it('GET returns agent after POST', async () => {
+    try {
     // Log before test
     // eslint-disable-next-line no-console
     console.log('Test start: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
     // Add agent
-    
     const { req: postReq, res: postRes } = createMocks({
-    
       method: 'POST',
-    
       body: { type: 'telegram', host: 'local', config: { foo: 'bar' } },
-    
     });
-    
     await handler(postReq, postRes);
-    
+    console.log('After POST: orchestrator.listAgents() =', JSON.stringify(orchestrator.listAgents(), null, 2));
+    console.log('After POST: agentManager.listAgents() =', JSON.stringify(agentManager.listAgents(), null, 2));
     // Now GET
-    
     const { req, res } = createMocks({ method: 'GET' });
-    
     await handler(req, res);
-    
     const data = JSON.parse(res._getData());
-    
-    // Debug: log agents if test fails
-    if (data.agents.length !== 1) {
-      // eslint-disable-next-line no-console
-      console.error('Agents present:', JSON.stringify(data.agents, null, 2));
-      // eslint-disable-next-line no-console
-      console.error('orchestrator.listAgents() =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    }
+    console.log('After GET: data.agents =', JSON.stringify(data.agents, null, 2));
+    console.log('After GET: orchestrator.listAgents() =', JSON.stringify(orchestrator.listAgents(), null, 2));
+    console.log('After GET: agentManager.listAgents() =', JSON.stringify(agentManager.listAgents(), null, 2));
     expect(data.agents.length).toBe(1);
     // Log after test
     // eslint-disable-next-line no-console
     console.log('Test end: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
+    } catch (err) {
+      console.error('Test error:', err);
+      throw err;
+    }
   });
 });

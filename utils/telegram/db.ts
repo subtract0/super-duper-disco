@@ -4,11 +4,13 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export async function insertMessage(message: any, supabaseClient = supabase) {
+export async function insertMessage(message: any, supabaseClient?: any) {
+  if (!supabaseClient) throw new Error('supabaseClient is undefined in insertMessage');
   return await supabaseClient.from('messages').insert([message]);
 }
 
-export async function fetchMessageHistory(user_id: string, supabaseClient = supabase) {
+export async function fetchMessageHistory(user_id: string, supabaseClient?: any) {
+  if (!supabaseClient) throw new Error('supabaseClient is undefined in fetchMessageHistory');
   return await supabaseClient
     .from('messages')
     .select('*')

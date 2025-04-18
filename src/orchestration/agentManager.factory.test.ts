@@ -23,6 +23,10 @@ jest.mock('./autoGenAgent', () => ({ AutoGenAgent: jest.fn().mockImplementation(
   updateHeartbeat: jest.fn(),
   updateActivity: jest.fn(),
 })) }));
+jest.mock('./supabaseAgentOps', () => ({
+  logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
+  fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
+}));
 
 import { agentManager } from './agentManager';
 

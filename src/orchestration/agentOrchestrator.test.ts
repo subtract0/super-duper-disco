@@ -1,3 +1,8 @@
+jest.mock('./supabaseAgentOps', () => ({
+  logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
+  fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
+}));
+
 import { AgentOrchestrator, OrchestratedAgent } from './agentOrchestrator';
 import { agentManager } from './agentManager';
 

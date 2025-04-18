@@ -42,6 +42,7 @@ import { logAgentHealthToSupabase } from './supabaseAgentOps';
 import { QCAgent } from './agents/qcAgent';
 
 export class AgentOrchestrator {
+  private agents: OrchestratedAgent[] = []; // Always initialize as empty array
   private recoveryAttempts: Record<string, number> = {};
   private maxRecoveryAttempts = 3;
   private recoveryCooldownMs = 2000; // 2 seconds for demo
@@ -104,6 +105,7 @@ export class AgentOrchestrator {
   }
 
   constructor() {
+    this.agents = []; // Defensive: ensure always initialized
     // Future: Load agents from persistent store, initialize orchestrator state
     // Auto-recovery: subscribe to health changes
     const debounce: Record<string, NodeJS.Timeout> = {};
@@ -314,6 +316,7 @@ export class AgentOrchestrator {
     const { agentManager } = require('./agentManager');
     agentManager.clearAllAgents();
     this.agents = [];
+    if (!Array.isArray(this.agents)) this.agents = [];
     this.agentHealthMap = {};
     this.messageBus = [];
     this.recoveryAttempts = {};

@@ -1,7 +1,7 @@
 module.exports = {
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest',
-    '^.+\\.(js|jsx)$': 'babel-jest',
+    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.(tsx|js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
     '/node_modules/(?!(openai|@langchain/openai)/)'

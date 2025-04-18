@@ -152,11 +152,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse,
       mime_type: mime_type ?? '',
       telegram_message_id,
       role: 'user',
-    }, supabaseClient);
+    }, client);
     if (insertError) console.error('[Supabase] Insert error:', insertError);
 
     // Fetch conversation history (last 10 messages)
-    const { data: history, error: historyError } = await fetchMessageHistory(user_id, supabaseClient);
+    const { data: history, error: historyError } = await fetchMessageHistory(user_id, client);
     if (historyError) console.error('[Supabase] History fetch error:', historyError);
     console.log('[GPT] Retrieved history:', history);
     if (!Array.isArray(history)) {

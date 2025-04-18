@@ -1,8 +1,3 @@
-import '@testing-library/jest-dom';
-import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import AuthForm from './AuthForm';
-
 jest.mock('@supabase/supabase-js', () => ({
   createClient: () => ({
     auth: {
@@ -11,6 +6,12 @@ jest.mock('@supabase/supabase-js', () => ({
     },
   }),
 }));
+
+import React from 'react';
+import '@testing-library/jest-dom';
+
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import AuthForm from './AuthForm';
 
 describe('AuthForm', () => {
   it('renders login/register form', () => {

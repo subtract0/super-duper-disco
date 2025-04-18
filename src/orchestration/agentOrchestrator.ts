@@ -27,7 +27,7 @@ export type AgentMessage = {
 
 export type SwarmState = {
   agents: OrchestratedAgent[];
-  messages: AgentMessage[];
+  messages: A2AEnvelope[];
 };
 
 /**
@@ -41,6 +41,7 @@ import { logAgentHealthToSupabase } from './supabaseAgentOps';
 
 import { QCAgent } from './agents/qcAgent';
 import { BuilderAgent } from './agents/builderAgent';
+import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 export class AgentOrchestrator {
   private agents: OrchestratedAgent[] = []; // Always initialize as empty array
@@ -61,7 +62,7 @@ export class AgentOrchestrator {
   /**
    * In-memory message bus for agent-to-agent communication (stub for swarm/autogen/LangChain integration)
    */
-  private messageBus: AgentMessage[] = [];
+  private messageBus: A2AEnvelope[] = [];
 
   /**
    * Spawn a swarm of agents (stub for autogen/LangChain integration)
@@ -73,18 +74,33 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Send a message from one agent to another (stub for agent communication)
+   * Send a message from one agent to another using A2A protocol envelope
    */
   async sendAgentMessage(msg: AgentMessage): Promise<void> {
-    // Future: Use autogen/LangChain or distributed message bus
-    this.messageBus.push({ ...msg, timestamp: Date.now() });
+    // Wrap the message in an A2A protocol envelope
+    const envelope = buildA2AEnvelope({
+      type: 'agent-message',
+      from: msg.from,
+      to: msg.to,
+      body: msg.content,
+      // Optionally: threadId, signature, etc.
+    });
+    this.messageBus.push(envelope);
+  }
+  // TODO: Update getAgentMessages and all consumers to parse/filter A2AEnvelope
+
+  /**
+   * Get all messages sent to a particular agent (A2AEnvelope)
+   */
+  getAgentMessages(agentId: string): A2AEnvelope[] {
+    return this.messageBus.filter(m => m.to === agentId);
   }
 
   /**
-   * Get all messages sent to a particular agent
+   * Helper to extract message body/content for legacy consumers
    */
-  getAgentMessages(agentId: string): AgentMessage[] {
-    return this.messageBus.filter(m => m.to === agentId);
+  extractMessageContent(envelope: A2AEnvelope): any {
+    return envelope.body;
   }
 
   /**

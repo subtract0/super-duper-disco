@@ -1,4 +1,5 @@
 import { agentManager } from "./agentManager";
+import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 /**
  * MultiAgentOrchestrator: Manages the lifecycle and workflow of all core agents in the Cascade protocol.
@@ -49,8 +50,15 @@ export class MultiAgentOrchestrator {
   async sendMessage(from: string, to: string, message: string): Promise<string> {
     const info = agentManager.agents.get(to);
     if (!info) throw new Error(`Agent with id '${to}' not found.`);
-    const logMsg = `[${new Date().toISOString()}] ${from} -> ${to}: ${message}`;
-    info.logs.push(logMsg);
+    // Build and log an A2A envelope for the message
+    const envelope: A2AEnvelope = buildA2AEnvelope({
+      type: 'agent-message',
+      from,
+      to,
+      body: message,
+      // Optionally: threadId, signature, etc.
+    });
+    info.logs.push(`[A2A] ${JSON.stringify(envelope)}`);
     // Delegate to the correct method on the agent instance
     if (to === "researcher" && info.instance.researchTopic) {
       return await this.safeCall("researcher", () => info.instance.researchTopic(message));

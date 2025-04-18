@@ -1,5 +1,6 @@
 import { LangChainAgent } from "./langchainAgent";
 import { v4 as uuidv4 } from "uuid";
+import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 /**
  * MultiAgentWorkflow coordinates a team of agents with different roles, tools, and memory
@@ -18,6 +19,7 @@ export class MultiAgentWorkflow {
   agents: Record<string, LangChainAgent> = {};
   roles: Record<string, string> = {};
   memory: Record<string, string[]> = {};
+  messageBus: A2AEnvelope[] = [];
 
   constructor(agentConfigs: AgentConfig[]) {
     for (const config of agentConfigs) {
@@ -28,7 +30,7 @@ export class MultiAgentWorkflow {
   }
 
   /**
-   * Send a message from one agent to another, with role/context awareness and memory.
+   * Send a message from one agent to another, with role/context awareness and memory, using A2A protocol envelope.
    */
   async sendMessage(fromId: string, toId: string, message: string): Promise<string> {
     const fromRole = this.roles[fromId];
@@ -36,6 +38,17 @@ export class MultiAgentWorkflow {
     // Compose history for memory/context
     const history = this.memory[toId].slice(-10).join("\n");
     const prompt = `You are the ${toRole}. ${history ? "Here is your recent conversation:\n" + history : ""}\n${fromRole} says: ${message}`;
+    // Build and store an A2A envelope for the message
+    const envelope: A2AEnvelope = buildA2AEnvelope({
+      type: 'agent-message',
+      from: fromId,
+      to: toId,
+      body: message,
+      // Optionally: threadId, signature, etc.
+    });
+    this.messageBus.push(envelope);
+    // Log envelope for traceability (could be replaced with a logger)
+    // console.log(`[A2A]`, envelope);
     const response = await this.agents[toId].chat(prompt);
     // Update memory
     this.memory[toId].push(`From ${fromRole}: ${message}`);

@@ -234,6 +234,38 @@ The dashboard provides rich, live feedback and error handling for agent operatio
 - Add tests in `components/*.test.tsx` and for API logic
 - See PLAN.md for key regression and integration tests
 
+## Local Development & Telegram Bot Integration
+
+### Fully Automated Telegram Bot Workflow
+
+You can now launch your entire Telegram bot dev environment—including Next.js, ngrok, and webhook setup—with just two commands (or a single one-liner):
+
+**Step 1: Start Next.js and ngrok**
+```powershell
+./start-dev.ps1
+```
+- Starts the dev server and ngrok, making your local API publicly accessible.
+
+**Step 2: Automatically set the Telegram webhook**
+```powershell
+./set-telegram-webhook.ps1 <YOUR_BOT_TOKEN>
+```
+- This script fetches the current ngrok public URL and sets your Telegram bot webhook to point to `/api/telegram`.
+- No manual copy-paste needed!
+
+**One-liner for full automation:**
+```powershell
+./start-dev.ps1; ./set-telegram-webhook.ps1 <YOUR_BOT_TOKEN>
+```
+
+**Result:**
+- Your Telegram bot is immediately ready for live conversation and testing with your local dev environment.
+- You can send messages to your bot in Telegram and see responses routed through your local server.
+
+**Troubleshooting:**
+- Only one ngrok tunnel per account/session is allowed on free accounts. If you get an error, close other ngrok sessions or use the ngrok dashboard to terminate old tunnels.
+- If your bot does not respond, make sure both scripts ran successfully and check that the webhook is set to the current ngrok URL.
+
 ## Deployment
 - Deployable to Vercel, Netlify, or similar (see Next.js docs)
 

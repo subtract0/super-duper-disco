@@ -127,7 +127,7 @@ export default async function handler(
         }
         return res.status(200).json({ ok: true });
       }
-      // For normal text messages (not feature requests), save message and continue to reply generation
+      // For normal text messages (not feature requests), save message and process with a real agent
       const { error: insertError } = await insertMessageImpl({
         user_id,
         message_type,
@@ -143,6 +143,42 @@ export default async function handler(
         await sendTelegramMessage(chat_id, `Error: ${errorMsg}`);
         return res.status(200).json({ ok: false, error: errorMsg });
       }
+      // Launch a temporary agent to process the message
+      try {
+        const { v4: uuidv4 } = require('uuid');
+        const agentId = `tg-${user_id}-${Date.now()}`;
+        const launched = await orchestrator.launchAgent({
+          id: agentId,
+          type: 'native',
+          status: 'pending',
+          host: 'telegram',
+          config: {},
+        });
+        // Send the user's message to the agent and get a response
+        let agentResponse = '';
+        if (launched && launched.id) {
+          // Use agentManager to get the actual running instance
+          const { agentManager } = require('../../src/orchestration/agentManager');
+          const info = agentManager.agents.get(agentId);
+          const instance = info?.instance;
+          if (instance && typeof instance.chat === 'function') {
+            agentResponse = await instance.chat(content);
+          } else if (instance && typeof instance.handleMessage === 'function') {
+            agentResponse = await instance.handleMessage(content);
+          } else {
+            agentResponse = 'Agent is running but has no chat/handleMessage method.';
+          }
+        } else {
+          agentResponse = 'Failed to launch agent.';
+        }
+        // Send agent response back to Telegram
+        await sendTelegramMessage(chat_id, agentResponse);
+        // Stop the agent after processing
+        await orchestrator.stopAgent(agentId);
+      } catch (err) {
+        await sendTelegramMessage(chat_id, `❌ Agent error: ${err?.message || err}`);
+      }
+      return res.status(200).json({ ok: true });
     }
     // 2. Image (photo)
     else if (message.photo) {

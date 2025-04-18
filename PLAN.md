@@ -29,15 +29,25 @@ If any regression or failure is detected in the above completed tickets, immedia
 ## Vision
 Enable users to describe a feature to a Telegram bot, which triggers a multi-agent system to build, test, review, and deploy agents on demand, with oversight and quality control, all orchestrated and deployed remotely/serverless.
 
+**Central to our architecture:** All agent communication and context management will be built from the ground up around the [A2A protocol](https://github.com/google/A2A) and the [Model Context Protocol](https://modelcontextprotocol.io/introduction). These protocols will serve as the foundation for all agent-to-agent and agent-to-context interactions, ensuring interoperability, extensibility, and robust context sharing across the entire system.
+
 The framework must also learn persistently from its interactions and project work: it should save important learnings, pitfalls, and operational context (such as OS quirks, PowerShell/Windows specifics, and other environment-dependent knowledge) to Supabase as a persistent memory. This memory should be accessible across all deployments and sessions, enabling the system to improve, adapt, and share context no matter where it is run from.
 
 ## Milestones & Tasks
+
+### 0. Protocol-Centric Agent Communication (A2A & Model Context Protocol)
+- [ ] **Objective:** Implement A2A and Model Context Protocol as the foundation for all agent communication and context management.
+  - [ ] Research and document requirements for A2A and Model Context Protocol
+  - [ ] Build core adapters and middleware for agent-to-agent (A2A) and agent-to-context (Model Context Protocol) messaging
+  - [ ] Refactor all agent orchestration, messaging, and memory flows to use these protocols as the default
+  - [ ] Write comprehensive tests for protocol compliance and edge cases
+  - [ ] Document protocol usage and extension points for new agent types
 
 ### 1. Multi-Agent Orchestration Foundation
 - [x] **Objective:** Refactor and extend the Agent Manager and Orchestrator for dynamic, in-memory agent lifecycle management and health monitoring.
   - [x] Agents can be launched, stopped, monitored, and auto-recovered
   - [x] Health status, logs, and live state are accessible via API/dashboard
-  - [ ] Modular support for native, LangChain, and AutoGen agents
+  - [x] Modular support for native, LangChain, and AutoGen agents
   - [x] Audit and refactor `src/orchestration/agentManager.ts` and `agentOrchestrator.ts`
   - [x] Implement in-memory health store, heartbeats, and auto-restart
   - [x] Add/extend API endpoints and dashboard for live state
@@ -48,19 +58,19 @@ The framework must also learn persistently from its interactions and project wor
 - [x] **Objective:** Upgrade `/api/telegram` endpoint and bot logic to accept natural language feature requests and route them to the orchestration system.
   - [x] Telegram bot receives feature requests and parses intent
   - [x] Regex-based parser generates actionable agent creation tickets
-  - [x] User receives status updates and deployment links via Telegram
+  - [ ] User receives status updates and deployment links via Telegram
   - [x] Integrate OpenAI for response generation
-  - [x] Connect Telegram endpoint to orchestration API
-  - [x] Implement status and error feedback loop to user
+  - [ ] Connect Telegram endpoint to orchestration API
+  - [ ] Implement status and error feedback loop to user
   - [ ] Tests covering `/status` & error flows
 
 ### 3. On-Demand Agent Creation (Builder Agent)
-- [ ] **Objective:** Implement a Builder Agent that breaks down user feature requests into development tickets, triggers agent creation, and coordinates the build pipeline.
-  - [ ] Builder Agent receives parsed requests and creates tickets
-  - [ ] Tickets are processed according to the Cascade Protocol
+- [x] **Objective:** Implement a Builder Agent that breaks down user feature requests into development tickets, triggers agent creation, and coordinates the build pipeline.
+  - [x] Builder Agent receives parsed requests and creates tickets
+  - [x] Tickets are processed according to the Cascade Protocol
   - [ ] New agents are automatically built, tested, and deployed
-  - [ ] Implement Builder Agent logic and ticket creation
-  - [ ] Integrate with Orchestrator and Agent Manager
+  - [x] Implement Builder Agent logic and ticket creation
+  - [x] Integrate with Orchestrator and Agent Manager
   - [ ] Ensure ticket traceability and test coverage
 
 ### 4. Quality Control Agent (QC Agent)

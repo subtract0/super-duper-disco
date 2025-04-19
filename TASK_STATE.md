@@ -1,15 +1,32 @@
-# Cascade Project State — Reboot Preparation
+# Cascade Project State — Autonomous Agent Reboot
 
-**Last Updated:** 2025-04-18T14:13:41+02:00
+**Last Updated:** 2025-04-19T21:30:09+02:00
 
 ---
 
 ## Current Status
-- All recent test failures in `components/AuthForm.test.tsx` have been resolved. All tests for this component now pass.
-- Supabase client is now mocked in test environments to prevent real network calls.
-- Jest and Babel configurations are up-to-date for TSX/JSX and modern React.
-- Agent Manager and Orchestrator code have been refactored for robust agent lifecycle and health management.
-- No open `task*`, `todo*`, or legacy task files were found in the repo.
+- All documentation is now modular:
+  - `PLAN.md` contains the current project plan and milestones only.
+  - `BACKLOG_REFERENCE.md` contains the backlog, future ideas, and reference materials.
+  - `PROJECT_VISION_ARCHITECTURE.md` and `Cascade_Autonomous_Development_Protocol.md` define vision, architecture, and protocols.
+  - `TICKETS_FROM_THE_PAST.md` archives completed tickets and learnings.
+- Agent Manager and Orchestrator support live, in-memory agent lifecycle management, health, and logs.
+- All core protocols (A2A, Model Context Protocol) are implemented and referenced in architecture.
+- All test suites (Jest, component, integration) are passing and up-to-date.
+- No open `task*`, `todo*`, or legacy task files remain in the repo.
+- All major documentation files (`README.md`, `DOC.md`, `TESTING.md`) are current and cross-referenced.
+
+## Next Steps for Autonomous Agents
+- On reboot, always reference `.PROMPT-Cascade` for canonical project context and file roles.
+- Use `PLAN.md` for current milestones and actionable tasks.
+- Use `BACKLOG_REFERENCE.md` for autonomous backlog selection and reference.
+- Log all decisions, learnings, and operational context to persistent memory (Supabase).
+- Follow the Cascade Autonomous Development Protocol for all actions, escalation, and recovery.
+- Update this file after any major project state change or milestone completion.
+
+---
+
+**Ready for autonomous operation and agent-driven development.**
 
 ## Key Files for Cascade
 - `README.md`, `PLAN.md`, and `DOC.md` (see for architecture, backlog, and protocol)

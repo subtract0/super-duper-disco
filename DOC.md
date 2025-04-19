@@ -1,13 +1,41 @@
 # HandwerkerPro Documentation
 
+## Autonomous Agent Context & Documentation Structure
+
+- On startup, agents must reference `.PROMPT-Cascade` for canonical file roles and project context.
+
+- The documentation is modular:
+
+  - `PLAN.md`: Project plan and milestones (not the backlog)
+  - `BACKLOG_REFERENCE.md`: Backlog, future ideas, and reference materials
+  - `PROJECT_VISION_ARCHITECTURE.md`: Vision, architecture, and design principles
+  - `TICKETS_FROM_THE_PAST.md`: Archive of completed tickets and learnings
+  - `Cascade_Autonomous_Development_Protocol.md`: Autonomous protocol, workflow, and rules
+  - `README.md`: High-level architecture, features, and integrations
+  - `DOC.md`: (This file) Comprehensive documentation and file structure
+  - `.PROMPT-Cascade`: Canonical context reference for agents
+
+- Agents must always use the correct file for the required context:
+
+  - Use `PLAN.md` for current milestones and actionable tasks
+  - Use `BACKLOG_REFERENCE.md` for autonomous backlog selection and reference
+  - Log all decisions, learnings, and operational context to persistent memory (Supabase)
+  - Follow the Cascade Autonomous Development Protocol for all actions, escalation, and recovery
+
+---
+
 ## Documentation Policy
+
 - After every major code or architecture change, you **must** update `README.md`, `DOC.md`, and `PLAN.md` to reflect the latest state of the system.
+
 - As part of the PR checklist, verify that all documentation is up-to-date and includes:
+
   - Agent lifecycle and health state changes
   - Notification logic and user-facing feedback
   - Any new tickets or completed work in PLAN.md
 
 ## Overview
+
 HandwerkerPro is a modern, production-ready Next.js application for managing craftsmen and contractor quoting in Germany. It features robust authentication (Supabase), error monitoring (Sentry), and a polished UI (Tailwind CSS).
 
 ---

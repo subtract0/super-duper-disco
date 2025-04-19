@@ -41,11 +41,14 @@ This document consolidates best practices, patterns, and insights gathered while
 - Use Jest with `@testing-library/jest-dom` for DOM assertions.
 - For pure functions, assert return values and thrown errors.
 - Write tests for all major branches: success, failure, edge values.
+
 - Example patterns:
+
   ```ts
   expect(fn(args)).toEqual(expected);
   await expect(asyncFn()).rejects.toThrow(/error message/);
   ```
+
 
 ## Integration and API Tests
 
@@ -62,12 +65,15 @@ This document consolidates best practices, patterns, and insights gathered while
 - Use React Testing Library for component interactions.
 - Avoid ambiguous queries: prefer `findByText`, `findByRole`, or `getAllByText`.
 - Use `waitFor` to await asynchronous UI updates before assertions.
+
 - Example shuffle test refinement:
+
   ```ts
   const btn = await screen.findByText(/Shuffle Cards/);
   fireEvent.click(btn);
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   ```
+
 
 ## Mocking and Isolation
 
@@ -84,11 +90,13 @@ This document consolidates best practices, patterns, and insights gathered while
 ## Environment Configuration
 
 - Use dummy env vars in tests:
+
   ```js
   process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://...';
   process.env.TELEGRAM_BOT_TOKEN = 'dummy';
   process.env.OPENAI_API_KEY = 'dummy';
   ```
+
 - Never overwrite `.env` without confirmation.
 
 ## Running Tests

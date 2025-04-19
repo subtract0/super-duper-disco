@@ -10,6 +10,7 @@ import { transcribeVoiceWhisper } from '../../utils/telegram/transcription';
 import { callOpenAIGPT } from '../../utils/telegram/openai';
 import { insertMessage, fetchMessageHistory } from '../../utils/telegram/db';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
+import { agentManager } from '../../src/orchestration/agentManager';
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
@@ -120,7 +121,6 @@ export default async function handler(
           let agentResponse = '';
           if (launched && launched.id) {
             // Use agentManager to get the actual running instance
-            const { agentManager } = require('../../src/orchestration/agentManager');
             const info = agentManager.agents.get(agentId);
             const instance = info?.instance;
             if (instance && typeof instance.chat === 'function') {

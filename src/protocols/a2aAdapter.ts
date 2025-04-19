@@ -11,6 +11,7 @@ export type A2AEnvelope = {
   createdAt: number;
   body: any;
   signature?: string;
+  version?: string; // protocol version, optional for backward compatibility
 };
 
 import { v4 as uuidv4 } from 'uuid';
@@ -25,6 +26,7 @@ export function buildA2AEnvelope({
   body,
   threadId,
   signature,
+  version = '1',
 }: {
   type: string;
   from: string;
@@ -32,6 +34,7 @@ export function buildA2AEnvelope({
   body: any;
   threadId?: string;
   signature?: string;
+  version?: string;
 }): A2AEnvelope {
   return {
     id: uuidv4(),
@@ -43,14 +46,29 @@ export function buildA2AEnvelope({
     createdAt: Date.now(),
     body,
     signature,
+    version,
   };
 }
 
 /**
  * Parse and validate an A2A envelope
+ * Returns the envelope and protocol version (defaults to '1' if missing)
  */
 export function parseA2AEnvelope(msg: any): A2AEnvelope {
   if (!msg || msg.protocol !== 'A2A') throw new Error('Not an A2A message');
   // Optionally: verify signature, check required fields
+  if (!msg.version) msg.version = '1';
   return msg as A2AEnvelope;
 }
+
+/**
+ * Negotiate protocol version between two agents (returns agreed version or lowest)
+ */
+export function negotiateA2AVersion(agentVersionA?: string, agentVersionB?: string): string {
+  // For now, use the lowest version (string compare, assuming '1', '2', ...)
+  if (!agentVersionA && !agentVersionB) return '1';
+  if (!agentVersionA) return agentVersionB!;
+  if (!agentVersionB) return agentVersionA;
+  return agentVersionA < agentVersionB ? agentVersionA : agentVersionB;
+}
+

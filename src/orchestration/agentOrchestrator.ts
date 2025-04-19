@@ -108,7 +108,6 @@ export class AgentOrchestrator {
    */
   getSwarmState(): SwarmState {
     // Enrich agents with health/activity
-    const { agentManager } = require('./agentManager');
     const agentsWithHealth = agentManager.listAgents().map((agent: OrchestratedAgent) => ({
       ...agent,
       lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
@@ -203,7 +202,6 @@ export class AgentOrchestrator {
    */
   async launchAgent(agentConfig: OrchestratedAgent): Promise<OrchestratedAgent> {
     // Use agentManager.deployAgent for real agent process
-    const { agentManager } = require('./agentManager');
     agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
     const agentHealth = {
       lastHeartbeat: agentManager.getAgentLastHeartbeat(agentConfig.id),
@@ -333,7 +331,6 @@ export class AgentOrchestrator {
    * @returns Array of OrchestratedAgent
    */
   listAgents(): OrchestratedAgent[] {
-    const { agentManager } = require('./agentManager');
     return this.agents.map(agent => ({
       ...agent,
       lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
@@ -347,7 +344,6 @@ export class AgentOrchestrator {
    * Clears all agents, health/activity maps, and message bus.
    */
   reset() {
-    const { agentManager } = require('./agentManager');
     agentManager.clearAllAgents();
     this.agents = [];
     if (!Array.isArray(this.agents)) this.agents = [];

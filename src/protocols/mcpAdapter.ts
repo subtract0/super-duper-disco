@@ -8,7 +8,7 @@ export type MCPEnvelope = {
   to: string;
   protocol: 'MCP';
   createdAt: number;
-  version?: string; // for context versioning
+  version?: string; // protocol version, optional for backward compatibility
   body: any; // context payload or operation
   threadId?: string;
   signature?: string;
@@ -25,7 +25,7 @@ export function buildMCPEnvelope({
   to,
   body,
   threadId,
-  version,
+  version = '1',
   signature,
 }: {
   type: string;
@@ -64,7 +64,19 @@ export function parseMCPEnvelope(env: any): MCPEnvelope | null {
     typeof env.createdAt === 'number' &&
     env.body !== undefined
   ) {
+    if (!env.version) env.version = '1';
     return env as MCPEnvelope;
   }
   return null;
 }
+
+/**
+ * Negotiate protocol version between two agents (returns agreed version or lowest)
+ */
+export function negotiateMCPVersion(agentVersionA?: string, agentVersionB?: string): string {
+  if (!agentVersionA && !agentVersionB) return '1';
+  if (!agentVersionA) return agentVersionB!;
+  if (!agentVersionB) return agentVersionA;
+  return agentVersionA < agentVersionB ? agentVersionA : agentVersionB;
+}
+

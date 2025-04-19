@@ -1,5 +1,9 @@
 # Testing Department Guidelines
 
+> **See Also:**
+> - [PLAN.md](./PLAN.md) — Project state, roadmap, and backlog
+> - [start-dev.ps1](./start-dev.ps1) — Environment setup and project startup
+
 This document consolidates best practices, patterns, and insights gathered while working in the Testing Department for this project. It covers unit testing, integration testing, end-to-end testing, mocking strategies, reliability tips, and project-specific notes.
 
 ## Table of Contents

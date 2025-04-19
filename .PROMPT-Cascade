@@ -7,6 +7,8 @@
 - README.md — Architecture, features, and integrations
 - DOC.md — Detailed documentation and file structure
 - Cascade_Autonomous_Development_Protocol.md — Autonomous protocol, workflow, and rules
+- start-dev.ps1 — Canonical startup script for development environment
+- TESTING.md — Project-wide testing philosophy, patterns, and troubleshooting
 - .gitignore — Ignore patterns for commits
 - .env — (Never overwrite without explicit confirmation)
 

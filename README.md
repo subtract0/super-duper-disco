@@ -11,6 +11,8 @@ See [`docs/multi_agent_cascade_protocol_design.md`](docs/multi_agent_cascade_pro
 
 A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, Whisper) integrations.
 
+> **Note:** For Windows users, local development is fully automated! Use `start-dev.ps1` to start everything (Next.js, ngrok, Telegram webhook) with a single command. See the Local Development & Telegram Bot Integration section below for details.
+
 ---
 
 ## Features
@@ -29,8 +31,9 @@ A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, W
 ## Agent Swarm Architecture
 
 - This system is designed to be deployed as a swarm of agents, enabling scalable, collaborative, and distributed operation.
-- It leverages [autogen 0.2](https://github.com/microsoft/autogen) and [LangChain](https://github.com/langchain-ai/langchain) to orchestrate and manage multiple agents working in parallel or in coordination.
-- Each agent can be specialized for different tasks (e.g., Telegram handling, file management, voice transcription, etc.) and can communicate with other agents in the swarm.
+- It leverages [autogen 0.2](https://github.com/microsoft/autogen), [LangChain](https://github.com/langchain-ai/langchain), the [A2A Protocol](https://github.com/google/A2A), and [Model Context Protocol](https://modelcontextprotocol.io/introduction) to orchestrate and manage multiple agents working in parallel or in coordination.
+- Each agent can be specialized for different tasks (e.g., Telegram handling, file management, voice transcription, etc.) and can communicate with other agents in the swarm using robust, extensible protocols.
+- Agent execution is real: when deployed, agents run as background processes, perform actions, and update health/logs in real-time. The dashboard and API reflect the live state of running agents, not just static DB records.
 - This architecture supports robust, modular, and extensible deployments for advanced automation and AI-driven workflows.
 
 ## Multi-Agent Orchestration & Messaging
@@ -235,6 +238,29 @@ The dashboard provides rich, live feedback and error handling for agent operatio
 - See PLAN.md for key regression and integration tests
 
 ## Local Development & Telegram Bot Integration
+
+### ⚡ Windows Quickstart: Full Automation
+
+- **Use `start-dev.ps1` (PowerShell) for Windows:**
+  - This script will automatically:
+    - Kill any running Next.js and ngrok processes.
+    - Start the Next.js dev server.
+    - Start ngrok on port 3000.
+    - Wait for ngrok to be ready and set the Telegram webhook to your tunnel URL (using your `.env` bot token).
+  - **No manual ngrok or webhook steps needed!**
+  - Run with:
+    ```powershell
+    ./start-dev.ps1
+    ```
+- **To manually refresh the webhook:**
+  - Use `set-telegram-webhook.ps1` to re-set the webhook to the current ngrok URL if you restart ngrok or need to update the webhook only.
+    ```powershell
+    ./set-telegram-webhook.ps1
+    ```
+- **For Mac/Linux/CI or cross-platform:**
+  - Use the Node/TypeScript utility: `utils/ngrok.ts` (see code for usage). This provides similar automation for non-Windows environments.
+
+---
 
 ### Fully Automated Telegram Bot Workflow
 

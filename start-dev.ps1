@@ -23,8 +23,8 @@ if (!(Test-Path ".\ngrok.exe")) {
     exit 1
 }
 try {
-    Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "http 3000" -WorkingDirectory "."
-    Write-Host "[Cascade] ngrok started."
+    Start-Process -FilePath ".\ngrok.exe" -ArgumentList "http 3000" -WorkingDirectory "."
+    Write-Host "[Cascade] ngrok started in a new window."
 } catch {
     Write-Host "[Cascade] ERROR: Failed to start ngrok.exe."
 }
@@ -56,18 +56,27 @@ if (-not $publicUrl) {
 }
 # Read TELEGRAM_BOT_TOKEN from .env
 $envPath = Join-Path $PSScriptRoot ".env"
-$envLines = Get-Content $envPath | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' }
-$BotToken = $envLines[0] -replace '^TELEGRAM_BOT_TOKEN=', ''
+$envLines = Get-Content -Path $envPath -Encoding UTF8 | ForEach-Object { $_.Trim() }
+$tokenLine = $envLines | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' }
+if (-not $tokenLine) {
+    Write-Host "[Cascade] ERROR: TELEGRAM_BOT_TOKEN not found in .env file. Please add it."
+    exit 1
+}
+Write-Host "DEBUG: tokenLine = '$tokenLine'"
+$BotToken = $tokenLine -replace '^TELEGRAM_BOT_TOKEN=', ''
 $BotToken = $BotToken.Trim()
+Write-Host "DEBUG: BotToken = $BotToken"
 if (-not $BotToken) {
     Write-Host "[Cascade] ERROR: TELEGRAM_BOT_TOKEN is empty in .env file."
     exit 1
 }
 $webhookUrl = "$publicUrl/api/telegram"
-$setWebhookUrl = "https://api.telegram.org/bot$BotToken/setWebhook?url=$webhookUrl"
+$setWebhookUrl = "https://api.telegram.org/bot$BotToken/setWebhook"
 Write-Host "[Cascade] Setting Telegram webhook to: $webhookUrl"
+Write-Host "DEBUG: setWebhookUrl = $setWebhookUrl"
+Write-Host "DEBUG: BotToken = $BotToken"
 try {
-    $response = Invoke-RestMethod -Uri $setWebhookUrl -Method Post
+    $response = Invoke-RestMethod -Uri $setWebhookUrl -Method Post -Body @{ url = $webhookUrl }
     if ($response.ok -eq $true) {
         Write-Host "[Cascade] Telegram webhook set successfully!"
     } else {

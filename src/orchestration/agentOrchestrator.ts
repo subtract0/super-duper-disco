@@ -109,7 +109,7 @@ export class AgentOrchestrator {
   getSwarmState(): SwarmState {
     // Enrich agents with health/activity
     const { agentManager } = require('./agentManager');
-    const agentsWithHealth = agentManager.listAgents().map(agent => ({
+    const agentsWithHealth = agentManager.listAgents().map((agent: OrchestratedAgent) => ({
       ...agent,
       lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
       lastActivity: agentManager.getAgentLastActivity(agent.id),

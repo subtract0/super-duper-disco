@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { orchestrator } from "./index";
+import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const { id } = req.query;

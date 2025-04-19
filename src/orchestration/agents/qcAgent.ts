@@ -1,4 +1,5 @@
-import { LangChainAgent } from '../langchainAgent';
+import LangChainAgent from '../langchainAgent';
+
 
 export class QCAgent {
   id: string;

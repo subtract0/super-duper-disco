@@ -1,4 +1,5 @@
-import { LangChainAgent } from "../langchainAgent";
+import LangChainAgent from '../langchainAgent';
+
 
 /**
  * DevOpsAgent: Handles version control (Git), CI/CD verification, and reports status back to the Planner.

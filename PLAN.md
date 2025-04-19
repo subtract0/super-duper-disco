@@ -33,6 +33,33 @@ Enable users to describe a feature to a Telegram bot, which triggers a multi-age
 
 The framework must also learn persistently from its interactions and project work: it should save important learnings, pitfalls, and operational context (such as OS quirks, PowerShell/Windows specifics, and other environment-dependent knowledge) to Supabase as a persistent memory. This memory should be accessible across all deployments and sessions, enabling the system to improve, adapt, and share context no matter where it is run from.
 
+---
+
+## Current Architecture Overview
+
+### Agent Lifecycle & Management
+- **AgentManager** manages all agent lifecycles in-memory, allowing agents to be launched, stopped, monitored, and auto-recovered. Agents are tracked in a map and can be queried for health, logs, and activity. All agent state is live and up-to-date.
+- **AgentOrchestrator** coordinates agent deployment, monitoring, and recovery, leveraging AgentManager. It includes auto-recovery logic and integrates with persistent stores for logging and health tracking. No duplication of agent state.
+- **MultiAgentOrchestrator** coordinates workflows between multiple agents (planner, researcher, developer, devops), using A2A protocol envelopes for structured inter-agent messaging. Health and logs are always pulled from AgentManager for the dashboard and protocol summaries.
+
+### Protocols & Inter-Agent Messaging
+- **A2A Protocol** is used for structured agent-to-agent communication.
+- **Model Context Protocol** is referenced for context management and should be integrated wherever agent memory or context is needed.
+
+### Dashboard & API Integration
+- All dashboards and API endpoints reflect the live state of running agents, not just static DB records. This enables real-time monitoring and control.
+
+### Extension Points & Future Work
+- The system is modular and ready for extension with new agent types and protocols.
+- If OS-level background processes are needed (beyond Node in-memory), extend AgentManager with child_process or worker_threads.
+- Persistent memory and advanced context sharing should be implemented using the Model Context Protocol and Supabase.
+
+### Testing & Documentation
+- Write thorough tests to simulate agent crash/recovery and protocol workflows.
+- Keep PLAN.md and protocol documentation up to date for new contributors and scaling.
+
+---
+
 ## Milestones & Tasks
 
 ### 0. Protocol-Centric Agent Communication (A2A & Model Context Protocol)

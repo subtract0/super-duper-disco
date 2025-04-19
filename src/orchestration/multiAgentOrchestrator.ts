@@ -13,6 +13,7 @@ export class MultiAgentOrchestrator {
 
   constructor(openAIApiKey: string) {
     // Deploy and start all agents via AgentManager
+    if (!agentManager) throw new Error('agentManager is undefined. Ensure agentManager is imported and initialized.');
     agentManager.deployAgent("planner", "Planner Agent", "langchain", { openAIApiKey });
     agentManager.deployAgent("researcher", "Researcher Agent", "langchain", { openAIApiKey });
     agentManager.deployAgent("developer", "Developer Agent", "langchain", { openAIApiKey });

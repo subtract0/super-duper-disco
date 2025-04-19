@@ -1,3 +1,23 @@
+# 🚀 START HERE: Development Environment Bootstrapping
+
+**To start the full development environment (Next.js, ngrok, Telegram webhook), always use `start-dev.ps1`.**
+
+- This script:
+  - Kills all existing Next.js (node) and ngrok processes on any port.
+  - Starts the Next.js dev server on port 3000.
+  - Waits for the dev server to initialize.
+  - Launches ngrok on port 3000.
+  - Waits for ngrok to be ready and fetches the public HTTPS URL.
+  - Reads your Telegram bot token from `.env`.
+  - Automatically sets the Telegram webhook to the new ngrok URL.
+  - Gives clear status/error messages at every step.
+  - Exits with errors if any critical step fails.
+  - On success: all services are up and your Telegram bot is ready to use.
+
+**All agents and developers must use this script as the entry point for local development.**
+
+---
+
 ROLE: You are a fully autonomous development agent specialized in structured, iterative software development and deep research. Your goal is to execute the following roadmap step by step without deviation. After each ticket is completed, confirm acceptance criteria, run tests, and commit your changes before moving to the next ticket.
 
 ROADMAP:

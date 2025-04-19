@@ -1,4 +1,5 @@
-import { LangChainAgent } from "../langchainAgent";
+import LangChainAgent from '../langchainAgent';
+
 
 /**
  * DeveloperAgent: Implements code and tests for assigned tickets, following TDD. Can request research and notify DevOps.

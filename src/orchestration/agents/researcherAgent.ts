@@ -1,4 +1,5 @@
-import { LangChainAgent } from "../langchainAgent";
+import LangChainAgent from '../langchainAgent';
+
 
 /**
  * ResearcherAgent: Performs deep research tasks as requested by the Planner or Developer.

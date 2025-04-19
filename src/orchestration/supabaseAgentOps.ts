@@ -48,5 +48,13 @@ export async function fetchAgentLogsFromSupabase(
     console.error('[supabaseAgentOps] Failed to fetch logs:', error);
     return [];
   }
-  return data || [];
+  return (Array.isArray(data) ? data.map(log => ({
+    id: typeof log.id === 'string' ? log.id : '',
+    agent_id: typeof log.agent_id === 'string' ? log.agent_id : '',
+    timestamp: typeof log.timestamp === 'string' ? log.timestamp : '',
+    level: log.level === 'info' || log.level === 'warn' || log.level === 'error' ? log.level : 'info',
+    message: typeof log.message === 'string' ? log.message : '',
+    health: typeof log.health === 'string' ? log.health : '',
+    context: typeof log.context === 'object' && log.context !== null ? log.context : undefined
+  })) : []) as AgentHealthLog[];
 }

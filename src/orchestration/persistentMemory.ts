@@ -1,6 +1,7 @@
 import { supabase } from '../../utils/supabaseClient';
 
 import { buildModelContext, validateModelContext, ModelContextObject } from '../protocols/modelContextAdapter';
+import { buildMCPEnvelope, parseMCPEnvelope, MCPEnvelope } from '../protocols/mcpAdapter';
 
 export type PersistentMemoryRecord = {
   id?: string;
@@ -18,8 +19,9 @@ export class PersistentMemory {
    */
   async save(record: PersistentMemoryRecord): Promise<void> {
     // Build a Model Context object
+    // Build a Model Context object and wrap in MCP envelope
     const ctxObj: ModelContextObject = buildModelContext({
-      id: record.id || undefined,
+      id: record.id || "",
       type: record.type,
       version: '1',
       value: {
@@ -28,7 +30,13 @@ export class PersistentMemory {
       },
       provenance: 'persistentMemory',
     });
-    await supabase.from(this.table).insert([{ ...ctxObj }]);
+    const mcpEnvelope: MCPEnvelope = buildMCPEnvelope({
+      type: 'update',
+      from: 'persistentMemory',
+      to: 'supabase',
+      body: ctxObj,
+    });
+    await supabase.from(this.table).insert([{ ...mcpEnvelope.body }]);
   }
 
   /**
@@ -40,8 +48,11 @@ export class PersistentMemory {
     if (params.tag) q = q.contains('value->tags', [params.tag]);
     const { data, error } = await q;
     if (error) throw error;
-    // Validate and filter Model Context objects
-    return (data || []).filter(validateModelContext);
+    // Parse as MCP envelopes, extract context, and validate
+    return (data || [])
+      .map((row: any) => parseMCPEnvelope({ ...row, protocol: 'MCP', body: row }))
+      .filter((env: MCPEnvelope | null): env is MCPEnvelope => !!env && validateModelContext(env.body))
+      .map((env) => env.body);
   }
 
   /**
@@ -50,7 +61,11 @@ export class PersistentMemory {
   async getAll(): Promise<ModelContextObject[]> {
     const { data, error } = await supabase.from(this.table).select('*').order('createdAt', { ascending: false });
     if (error) throw error;
-    return (data || []).filter(validateModelContext);
+    // Parse as MCP envelopes, extract context, and validate
+    return (data || [])
+      .map((row: any) => parseMCPEnvelope({ ...row, protocol: 'MCP', body: row }))
+      .filter((env: MCPEnvelope | null): env is MCPEnvelope => !!env && validateModelContext(env.body))
+      .map((env) => env.body);
   }
 }
 

@@ -86,16 +86,10 @@ async function fetchAgentIdeasFromLLM(n: number = 3): Promise<AgentIdeaCard[]> {
 
 // Persistent smart agent idea fetcher with ELO and learning
 export async function smartAgentIdeas(n: number = 3): Promise<AgentIdeaCard[]> {
-  let persistentCards = await fetchAgentCards(n - 1); // fetch n-1 best cards
-  // Map to UI AgentIdeaCard format (add config)
-  let cards: AgentIdeaCard[] = persistentCards.map(card => ({
-    ...card,
-    config: { type: card.type }
-  }));
-  // Always add at least one new card per shuffle
-  const newIdeas = await fetchAgentIdeasFromLLM(1);
-  if (newIdeas.length > 0) {
-    const idea = newIdeas[0];
+  // Always generate n new ideas from LLM
+  const newIdeas = await fetchAgentIdeasFromLLM(n);
+  const cards: AgentIdeaCard[] = [];
+  for (const idea of newIdeas) {
     // Insert into Supabase and get the real card (with id, elo, etc)
     const newCard = await insertAgentCard({
       name: idea.name,

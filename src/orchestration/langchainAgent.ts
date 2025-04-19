@@ -53,3 +53,6 @@ export class LangChainAgent {
     return this.logs.slice(-20);
   }
 }
+
+export default LangChainAgent;
+

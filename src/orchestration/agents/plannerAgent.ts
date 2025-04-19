@@ -1,4 +1,5 @@
-import { LangChainAgent } from "../langchainAgent";
+import LangChainAgent from '../langchainAgent';
+
 
 /**
  * PlannerAgent: Orchestrates the Cascade protocol, manages the plan/tickets, tracks state, and notifies the user.

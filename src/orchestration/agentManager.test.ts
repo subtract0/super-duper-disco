@@ -28,6 +28,18 @@ jest.mock('./supabaseAgentOps', () => ({
 }));
 
 import { agentManager } from './agentManager';
+jest.mock('./persistentMemory', () => {
+  const records: any[] = [];
+  return {
+    persistentMemory: {
+      save: jest.fn(async (rec) => { records.push(rec); }),
+      query: jest.fn(async ({ type }) => records.filter(r => r.type === type).map(r => ({ value: { content: r.content } }))),
+      getAll: jest.fn(async () => records.map(r => ({ value: { content: r.content } }))),
+      clear: () => { records.length = 0; },
+      _records: records,
+    }
+  };
+});
 
 describe('AgentManager', () => {
 
@@ -52,47 +64,95 @@ describe('AgentManager', () => {
   beforeEach(() => {
     // Reset state before each test
     agentManager.clearAllAgents();
+    require('./persistentMemory').persistentMemory.clear();
   });
   afterEach(() => {
     // Ensure cleanup after each test
     agentManager.clearAllAgents();
+    require('./persistentMemory').persistentMemory.clear();
   });
 
-  test('should deploy and start an agent', () => {
+  test('should deploy and start an agent', async () => {
     const id = 'test-agent-1';
-    const type = 'test-type';
-    agentManager.deployAgent(id, type);
+    const type = 'native'; // Use a valid agent type
+    await agentManager.deployAgent(id, id, type);
     const agents = agentManager.listAgents();
+    if (agents.length === 0) {
+      throw new Error(`No agents found after deploy. Current agents: ${JSON.stringify(agents)}`);
+    }
     expect(agents.length).toBe(1);
     expect(agents[0].id).toBe(id);
     expect(agents[0].status).toBe('running');
   });
 
-  test('should stop an agent', () => {
-    const id = 'test-agent-2';
-    agentManager.deployAgent(id, 'test-type');
-    agentManager.stopAgent(id);
+  test('should persist agent state to memory on stop', async () => {
+    const id = 'persist-agent-1';
+    await agentManager.deployAgent(id, 'persist-type', 'native', { foo: 'bar' });
+    await agentManager.stopAgent(id);
+    const pm = require('./persistentMemory').persistentMemory;
+    const saved = pm._records.find((r: any) => r.content.id === id);
+    expect(saved).toBeDefined();
+    expect(saved.content.config.foo).toBe('bar');
+    expect(saved.type).toBe('agent_state');
+  });
+
+  test('should hydrate agent config from persistent memory on deploy', async () => {
+    const id = 'persist-agent-2';
+    const pm = require('./persistentMemory').persistentMemory;
+    pm._records.push({
+      type: 'agent_state',
+      content: {
+        id,
+        name: id,
+        type: 'native',
+        status: 'stopped',
+        config: { fromMemory: true },
+        logs: ['memory-log'],
+        lastHeartbeat: 123,
+        lastActivity: 456,
+        crashCount: 0,
+        stoppedAt: 789,
+      },
+      tags: ['agent', 'native', id],
+    });
+    await agentManager.deployAgent(id, id, 'native', { foo: 'bar' });
     const agent = agentManager.listAgents().find(a => a.id === id);
+    expect(agent).toBeDefined();
+    expect(agent!.config.fromMemory).toBe(true);
+    expect(agent!.config.foo).toBe('bar'); // merged config
+  });
+
+  test('should stop an agent', async () => {
+    const id = 'test-agent-2';
+    await agentManager.deployAgent(id, id, 'native');
+    await agentManager.stopAgent(id);
+    const agent = agentManager.listAgents().find(a => a.id === id);
+    if (!agent) {
+      throw new Error(`Agent not found after stop. Current agents: ${JSON.stringify(agentManager.listAgents())}`);
+    }
     expect(agent).toBeDefined();
     expect(agent!.status).toBe('stopped');
   });
 
-  test('should return logs for an agent', () => {
+  test('should return logs for an agent', async () => {
     const id = 'test-agent-3';
-    agentManager.deployAgent(id, 'test-type');
+    await agentManager.deployAgent(id, id, 'native');
     const logs = agentManager.getAgentLogs(id) || [];
+    if (logs.length === 0) {
+      throw new Error(`No logs found for agent ${id}. All logs: ${JSON.stringify(logs)}`);
+    }
     expect(logs.length).toBeGreaterThan(0);
     expect(logs[0]).toContain('Agent started');
-    agentManager.stopAgent(id);
+    await agentManager.stopAgent(id);
     const stoppedLogs = agentManager.getAgentLogs(id) || [];
     expect(stoppedLogs.some((log: string) => log.includes('Agent stopped'))).toBe(true);
   });
 
-  test('should update health status correctly', () => {
+  test('should update health status correctly', async () => {
     const id = 'test-agent-4';
-    agentManager.deployAgent(id, 'test-type');
+    await agentManager.deployAgent(id, id, 'native');
     expect(agentManager.getAgentHealth(id)).toBe('running');
-    agentManager.stopAgent(id);
+    await agentManager.stopAgent(id);
     expect(agentManager.getAgentHealth(id)).toBe('stopped');
   });
 });

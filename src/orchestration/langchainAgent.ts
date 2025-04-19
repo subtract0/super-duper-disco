@@ -6,6 +6,7 @@ export class LangChainAgent {
   status: 'stopped' | 'running';
   model: ChatOpenAI;
   logs: string[];
+  heartbeatInterval: NodeJS.Timeout | null = null;
 
   constructor(id: string, openAIApiKey: string) {
     this.id = id;
@@ -21,11 +22,21 @@ export class LangChainAgent {
   async start() {
     this.status = 'running';
     this.logs.push(`[${new Date().toISOString()}] LangChain agent started`);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.heartbeatInterval = setInterval(() => {
+      if (typeof (this as any).updateHeartbeat === 'function') {
+        (this as any).updateHeartbeat();
+      }
+    }, 5000);
+    if (typeof (this as any).updateHeartbeat === 'function') {
+      (this as any).updateHeartbeat();
+    }
   }
 
   async stop() {
     this.status = 'stopped';
     this.logs.push(`[${new Date().toISOString()}] LangChain agent stopped`);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
   }
 
   async chat(input: string): Promise<string> {

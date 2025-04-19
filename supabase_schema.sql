@@ -69,6 +69,25 @@ create table if not exists persistent_memory (
     tags text[],
     created_at timestamptz default now()
 );
+
+-- 7. MCP-compliant Agent Messages Table for protocol-based agent memory
+create table if not exists agent_messages (
+    id uuid primary key default uuid_generate_v4(),
+    type text not null, -- e.g. 'chat', 'system', 'context'
+    version text not null default '1',
+    value jsonb not null, -- stores { content, role, tags, ... }
+    provenance text,      -- e.g. 'telegram', 'web', 'persistentMemory'
+    thread_id text,       -- for multi-turn conversations
+    user_id text,
+    agent_id text,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+);
+-- Enable RLS and allow all inserts for debugging
+alter table agent_messages enable row level security;
+create policy "Allow all inserts" on agent_messages for insert using (true);
+
+
     file_size bigint,                -- file size in bytes (if applicable)
     mime_type text,                  -- MIME type (if applicable)
     telegram_message_id bigint,      -- optional: for referencing the original Telegram message

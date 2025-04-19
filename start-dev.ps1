@@ -1,5 +1,31 @@
 # PowerShell script to start Next.js dev server and ngrok automatically (Windows robust)
-# Kills any existing ngrok/Next.js processes, then starts both with error handling
+# Tracks PIDs for node/ngrok, validates .env, logs to file, and kills only those started by this script
+
+$logPath = Join-Path $PSScriptRoot "cascade-dev.log"
+Start-Transcript -Path $logPath -Append | Out-Null
+
+function Stop-PreviousProcesses {
+    $pidFile = Join-Path $PSScriptRoot ".cascade-pids.json"
+    if (Test-Path $pidFile) {
+        try {
+            $pids = Get-Content $pidFile | ConvertFrom-Json
+            foreach ($entry in $pids) {
+                if ($entry.Name -and $entry.PID) {
+                    $proc = Get-Process -Id $entry.PID -ErrorAction SilentlyContinue
+                    if ($proc) {
+                        Write-Host "[Cascade] Stopping previous $($entry.Name) process (PID=$($entry.PID))..."
+                        Stop-Process -Id $entry.PID -Force
+                    }
+                }
+            }
+            Remove-Item $pidFile -Force
+        } catch {
+            Write-Host "[Cascade] Warning: Could not clean up previous PIDs. $_"
+        }
+    }
+}
+
+Stop-PreviousProcesses
 
 Write-Host "[Cascade] Killing existing Next.js (node) processes..."
 Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force
@@ -8,26 +34,35 @@ Write-Host "[Cascade] Killing existing ngrok processes..."
 Get-Process -Name ngrok -ErrorAction SilentlyContinue | Stop-Process -Force
 
 Write-Host "[Cascade] Starting Next.js dev server (npx next dev)..."
+$pidFile = Join-Path $PSScriptRoot ".cascade-pids.json"
+$pids = @()
 try {
-    Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c npx next dev" -WorkingDirectory "."
-    Write-Host "[Cascade] Next.js dev server started."
+    $nodeProc = Start-Process -NoNewWindow -FilePath "cmd.exe" -ArgumentList "/c npx next dev" -WorkingDirectory "." -PassThru
+    $pids += @{ Name = "node"; PID = $nodeProc.Id }
+    Write-Host "[Cascade] Next.js dev server started (PID=$($nodeProc.Id))."
 } catch {
     Write-Host "[Cascade] ERROR: Failed to start Next.js dev server. Check if npx/next is installed."
 }
 
-Start-Sleep -Seconds 8  # Give Next.js more time to start
+$maxWaitSeconds = 5
+Write-Host "[Cascade] Waiting for $maxWaitSeconds seconds to allow Next.js to start..."
+Start-Sleep -Seconds $maxWaitSeconds
 
 Write-Host "[Cascade] Starting ngrok tunnel (ngrok.exe http 3000)..."
 if (!(Test-Path ".\ngrok.exe")) {
     Write-Host "[Cascade] ERROR: ngrok.exe not found in project root. Please download it from https://ngrok.com/download and place it here."
+    Stop-Transcript | Out-Null
     exit 1
 }
 try {
-    Start-Process -FilePath ".\ngrok.exe" -ArgumentList "http 3000" -WorkingDirectory "."
-    Write-Host "[Cascade] ngrok started in a new window."
+    $ngrokProc = Start-Process -FilePath ".\ngrok.exe" -ArgumentList "http 3000" -WorkingDirectory "." -PassThru
+    $pids += @{ Name = "ngrok"; PID = $ngrokProc.Id }
+    Write-Host "[Cascade] ngrok started (PID=$($ngrokProc.Id))."
 } catch {
     Write-Host "[Cascade] ERROR: Failed to start ngrok.exe."
 }
+# Save PIDs
+$pids | ConvertTo-Json | Set-Content -Path $pidFile
 
 # --- Automated Telegram webhook setup ---
 Write-Host "[Cascade] Waiting for ngrok tunnel to become available..."
@@ -54,22 +89,40 @@ if (-not $publicUrl) {
     Write-Host "[Cascade] ERROR: No HTTPS ngrok tunnel found."
     exit 1
 }
-# Read TELEGRAM_BOT_TOKEN from .env
+# --- .env validation ---
 $envPath = Join-Path $PSScriptRoot ".env"
+if (!(Test-Path $envPath)) {
+    Write-Host "[Cascade] ERROR: .env file not found!"
+    Stop-Transcript | Out-Null
+    exit 1
+}
 $envLines = Get-Content -Path $envPath -Encoding UTF8 | ForEach-Object { $_.Trim() }
-$tokenLine = $envLines | Where-Object { $_ -match '^TELEGRAM_BOT_TOKEN=' }
-if (-not $tokenLine) {
-    Write-Host "[Cascade] ERROR: TELEGRAM_BOT_TOKEN not found in .env file. Please add it."
+$envMap = @{}
+foreach ($line in $envLines) {
+    if ($line -match "^(.*?)=(.*)$") {
+        $envMap[$matches[1]] = $matches[2]
+    }
+}
+$requiredKeys = @(
+    'TELEGRAM_BOT_TOKEN',
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+    'OPENAI_API_KEY',
+    'WHISPER_API_KEY'
+)
+$missing = @()
+foreach ($key in $requiredKeys) {
+    if (-not $envMap[$key] -or $envMap[$key].Trim() -eq "") {
+        $missing += $key
+    }
+}
+if ($missing.Count -gt 0) {
+    Write-Host "[Cascade] ERROR: The following required keys are missing or empty in .env: $($missing -join ", ")"
+    Stop-Transcript | Out-Null
     exit 1
 }
-Write-Host "DEBUG: tokenLine = '$tokenLine'"
-$BotToken = $tokenLine -replace '^TELEGRAM_BOT_TOKEN=', ''
-$BotToken = $BotToken.Trim()
+$BotToken = $envMap['TELEGRAM_BOT_TOKEN']
 Write-Host "DEBUG: BotToken = $BotToken"
-if (-not $BotToken) {
-    Write-Host "[Cascade] ERROR: TELEGRAM_BOT_TOKEN is empty in .env file."
-    exit 1
-}
 $webhookUrl = "$publicUrl/api/telegram"
 $setWebhookUrl = "https://api.telegram.org/bot$BotToken/setWebhook"
 Write-Host "[Cascade] Setting Telegram webhook to: $webhookUrl"
@@ -89,3 +142,4 @@ try {
     exit 1
 }
 Write-Host "[Cascade] All services started and Telegram webhook set. You can now chat with your bot."
+Stop-Transcript | Out-Null

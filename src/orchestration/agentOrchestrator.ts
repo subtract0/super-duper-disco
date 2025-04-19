@@ -200,19 +200,43 @@ export class AgentOrchestrator {
    * @returns The launched agent (with updated status)
    */
   async launchAgent(agentConfig: OrchestratedAgent): Promise<OrchestratedAgent> {
-    // Use agentManager.deployAgent for real agent process
-    agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
-    const logMsg = `Agent launched: ${agentConfig.id}`;
-    agentLogStore.addLog({
-      agentId: agentConfig.id,
-      timestamp: Date.now(),
-      level: 'info',
-      message: logMsg,
-    });
-    logAgentHealthToSupabase(agentConfig.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
-    // Return the authoritative agent info from agentManager
-    const agent = agentManager.agents.get(agentConfig.id);
-    return agent as OrchestratedAgent;
+    try {
+      await agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
+      const logMsg = `Agent launched: ${agentConfig.id}`;
+      agentLogStore.addLog({
+        agentId: agentConfig.id,
+        timestamp: Date.now(),
+        level: 'info',
+        message: logMsg,
+      });
+      try {
+        await logAgentHealthToSupabase(agentConfig.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
+      } catch (supabaseErr) {
+        console.error('[Orchestrator] Supabase health log error:', supabaseErr, supabaseErr?.stack);
+      }
+      // Return the authoritative agent info from agentManager
+      const agent = agentManager.agents.get(agentConfig.id);
+      return agent as OrchestratedAgent;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('[Orchestrator] Agent launch error:', err, err?.stack);
+      agentLogStore.addLog({
+        agentId: agentConfig.id,
+        timestamp: Date.now(),
+        level: 'error',
+        message: `Agent launch failed: ${errorMsg}`,
+      });
+      try {
+        await logAgentHealthToSupabase(agentConfig.id, 'crashed', errorMsg, 'error', { event: 'launchAgent', error: errorMsg });
+      } catch (supabaseErr) {
+        console.error('[Orchestrator] Supabase health log error:', supabaseErr, supabaseErr?.stack);
+      }
+      return {
+        ...agentConfig,
+        status: 'crashed',
+        error: err,
+      };
+    }
   }
 
   /**

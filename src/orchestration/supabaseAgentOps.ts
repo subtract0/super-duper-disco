@@ -29,7 +29,7 @@ export async function logAgentHealthToSupabase(
     },
   ]);
   if (error) {
-    console.error('[supabaseAgentOps] Failed to log agent health:', error);
+    console.error('[supabaseAgentOps] Failed to log agent health:', error, error?.message, error?.stack, JSON.stringify(error));
   }
 }
 

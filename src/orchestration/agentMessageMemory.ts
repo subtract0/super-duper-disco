@@ -1,0 +1,111 @@
+import { supabase } from '../../utils/supabaseClient';
+import { supabaseServer } from '../../utils/supabaseServerClient';
+import { buildModelContext, validateModelContext, ModelContextObject } from '../protocols/modelContextAdapter';
+import { buildMCPEnvelope, parseMCPEnvelope, MCPEnvelope } from '../protocols/mcpAdapter';
+
+export type AgentMessageRecord = {
+  id?: string;
+  type: string; // e.g., 'chat', 'system', 'context'
+  content: string;
+  role: string; // 'user' | 'agent' | 'system'
+  tags?: string[];
+  provenance?: string;
+  thread_id?: string;
+  user_id?: string;
+  agent_id?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export class AgentMessageMemory {
+  private table = 'agent_messages';
+
+  /**
+   * Save a message as a Model Context Protocol envelope to Supabase.
+   */
+  async save(record: AgentMessageRecord): Promise<void> {
+    // Always provide a valid UUID for id (Supabase requires non-null UUID PK)
+    let id = record.id;
+    if (!id || typeof id !== 'string' || id.trim() === '') {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        id = crypto.randomUUID();
+      } else {
+        // Fallback simple UUID v4 generator
+        id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+          const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+          return v.toString(16);
+        });
+      }
+    }
+    const ctxObjInput: any = {
+      id,
+      type: record.type,
+      version: '1',
+      value: {
+        content: record.content,
+        role: record.role,
+        tags: record.tags,
+      },
+      provenance: record.provenance || 'telegram',
+      thread_id: record.thread_id,
+      user_id: record.user_id,
+      agent_id: record.agent_id,
+    };
+    const ctxObj: ModelContextObject = buildModelContext(ctxObjInput as any);
+
+    const mcpEnvelope: MCPEnvelope = buildMCPEnvelope({
+      type: 'update',
+      from: record.provenance || 'telegram',
+      to: 'supabase',
+      body: ctxObj,
+    });
+    // Remove 'access', 'createdAt', and 'updatedAt' properties if present (Supabase schema does not allow them)
+    if ('access' in mcpEnvelope.body) {
+      delete mcpEnvelope.body['access'];
+    }
+    if ('createdAt' in mcpEnvelope.body) {
+      delete mcpEnvelope.body['createdAt'];
+    }
+    if ('updatedAt' in mcpEnvelope.body) {
+      delete mcpEnvelope.body['updatedAt'];
+    }
+    console.log('[AgentMessageMemory.save] Attempting to insert MCP envelope:', JSON.stringify(mcpEnvelope.body, null, 2));
+    console.log('[AgentMessageMemory.save] Using server-side client for insert');
+    const { data, error } = await supabaseServer.from(this.table).insert([{ ...mcpEnvelope.body }]);
+    console.log('[AgentMessageMemory.save] Supabase insert (server client) result:', { data, error });
+    if (error) {
+      console.error('[AgentMessageMemory.save] Supabase insert error:', error, '\nMessage:', mcpEnvelope.body);
+      throw new Error(`[AgentMessageMemory.save] Supabase error: ${typeof error === 'object' && error.message ? error.message : JSON.stringify(error)} (MCP envelope: ${JSON.stringify(mcpEnvelope.body)})`);
+    }
+    if (!data) {
+      console.warn('[AgentMessageMemory.save] Supabase insert returned no data.', { mcpEnvelope: mcpEnvelope.body });
+    }
+  }
+
+  /**
+   * Fetch the last N messages for a thread/user as Model Context objects.
+   */
+  async fetchRecent({ thread_id, user_id, limit = 10 }: { thread_id?: string; user_id?: string; limit?: number }): Promise<ModelContextObject[]> {
+    let q = supabaseServer.from(this.table).select('*');
+    if (thread_id) q = q.eq('thread_id', thread_id);
+    if (user_id) q = q.eq('user_id', user_id);
+    q = q.order('created_at', { ascending: false }).limit(limit);
+    const response = await q;
+    const data = response && typeof response === 'object' ? response.data : undefined;
+    const error = response && typeof response === 'object' ? response.error : undefined;
+    if (error) {
+      console.error('[AgentMessageMemory.fetchRecent] Supabase fetch error:', error, '\nParams:', { thread_id, user_id, limit });
+      throw new Error(`[AgentMessageMemory.fetchRecent] Supabase error: ${typeof error === 'object' && error.message ? error.message : JSON.stringify(error)} (Params: ${JSON.stringify({ thread_id, user_id, limit })})`);
+    }
+    if (!Array.isArray(data)) {
+      console.warn('[AgentMessageMemory.fetchRecent] Supabase fetch returned no data or malformed data.', { thread_id, user_id, limit, data });
+      return [];
+    }
+    return (data || [])
+      .map((row: any) => parseMCPEnvelope({ ...row, protocol: 'MCP', body: row }))
+      .filter((env: MCPEnvelope | null): env is MCPEnvelope => !!env && validateModelContext(env.body))
+      .map((env) => env.body);
+  }
+}
+
+export const agentMessageMemory = new AgentMessageMemory();

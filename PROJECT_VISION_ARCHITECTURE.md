@@ -46,6 +46,7 @@ The framework must also learn persistently from its interactions and project wor
 
 ### Dashboard & API Integration
 - All dashboards and API endpoints reflect the live state of running agents, not just static DB records. This enables real-time monitoring and control.
+- **Architectural Guarantee:** All agent state, health, and logs exposed to APIs and dashboard components MUST always be sourced from the orchestrator (which delegates to AgentManager) and the global agentLogStore singleton. No endpoint or component may use stale, static, or duplicated agent data. This ensures that all monitoring and control is accurate, real-time, and consistent across the system.
 
 ### Extension Points & Future Work
 - The system is modular and ready for extension with new agent types and protocols.

@@ -65,6 +65,7 @@ export class BaseAgent {
  * Easily extendable for new agent types.
  */
 import LangChainAgent from './langchainAgent';
+import { persistentMemory } from './persistentMemory';
 
 function createAgent(id: string, name: string, type: string, config: any): BaseAgent {
   switch (type) {
@@ -87,8 +88,19 @@ class AgentManager {
    * Deploys and starts a new agent of the given type.
    * Uses createAgent factory for modularity.
    */
-  deployAgent(id: string, name: string, type: string = 'native', config: any = {}) {
-    const agent = createAgent(id, name, type, config);
+  async deployAgent(id: string, name: string, type: string = 'native', config: any = {}) {
+    // Try to load persistent memory for this agent (by id and type)
+    let hydratedConfig = { ...config };
+    try {
+      const memories = await persistentMemory.query({ type: 'agent_state' });
+      const agentMemory = memories.find(m => m.value?.content?.id === id || m.value?.content?.name === name);
+      if (agentMemory && agentMemory.value?.content) {
+        hydratedConfig = { ...hydratedConfig, ...agentMemory.value.content.config };
+      }
+    } catch (err) {
+      // If persistent memory fails, continue with provided config
+    }
+    const agent = createAgent(id, name, type, hydratedConfig);
     agent.start();
     const now = Date.now();
     this.agents.set(id, {
@@ -98,14 +110,14 @@ class AgentManager {
       logs: agent.logs,
       instance: agent,
       type,
-      config,
+      config: hydratedConfig,
       lastHeartbeat: now,
       lastActivity: now,
       crashCount: 0,
     });
   }
 
-  stopAgent(id: string) {
+  async stopAgent(id: string) {
     const info = this.agents.get(id);
     if (info && info.instance) {
       info.instance.stop();
@@ -118,6 +130,27 @@ class AgentManager {
         // fallback: ignore if not available
       }
       info.lastActivity = Date.now();
+      // Save agent state to persistent memory
+      try {
+        await persistentMemory.save({
+          type: 'agent_state',
+          content: {
+            id: info.id,
+            name: info.name,
+            type: info.type,
+            status: info.status,
+            config: info.config,
+            logs: info.logs,
+            lastHeartbeat: info.lastHeartbeat,
+            lastActivity: info.lastActivity,
+            crashCount: info.crashCount,
+            stoppedAt: Date.now(),
+          },
+          tags: ['agent', info.type, info.id],
+        });
+      } catch (err) {
+        // If persistent memory fails, continue
+      }
     }
   }
 

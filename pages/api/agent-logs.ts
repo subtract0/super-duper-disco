@@ -1,18 +1,17 @@
 // pages/api/agent-logs.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { AgentLogStore, AgentLogEntry } from '../../src/orchestration/agentLogs';
-
-const logStore = new AgentLogStore();
+import { agentLogStore, AgentLogEntry } from '../../src/orchestration/agentLogs';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // Aggregate the 50 most recent logs across all agents
   // AgentLogStore.logs is private, so we need a method to expose all logs
   // We'll add a method to AgentLogStore for this purpose if needed
+  // Use the global agentLogStore's logs for live data
   let logs: AgentLogEntry[] = [];
-  if (typeof (logStore as any).logs !== 'undefined') {
-    logs = (logStore as any).logs;
-  } else if (typeof (logStore as any).getAllLogs === 'function') {
-    logs = (logStore as any).getAllLogs();
+  if (typeof (agentLogStore as any).logs !== 'undefined') {
+    logs = (agentLogStore as any).logs;
+  } else if (typeof (agentLogStore as any).getAllLogs === 'function') {
+    logs = (agentLogStore as any).getAllLogs();
   }
   const sorted = logs.sort((a, b) => b.timestamp - a.timestamp).slice(0, 50);
   // Format for AgentLogViewer

@@ -44,15 +44,14 @@ import { BuilderAgent } from './agents/builderAgent';
 import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 export class AgentOrchestrator {
-  private agents: OrchestratedAgent[] = []; // Always initialize as empty array
+  // All agent state is managed solely via agentManager; do not duplicate agent state here.
   private recoveryAttempts: Record<string, number> = {};
   private maxRecoveryAttempts = 3;
   private recoveryCooldownMs = 2000; // 2 seconds for demo
 
   /**
-   * In-memory list of orchestrated agents. In production, this should be backed by a DB or distributed store.
+   * NOTE: AgentOrchestrator does not maintain its own agent state. All agent lifecycle, health, and logs must be accessed via agentManager.
    */
-  // Agents are now managed solely via agentManager; no in-memory duplication here.
 
   /**
    * In-memory agent health/activity map (mirrors AgentManager)
@@ -203,28 +202,17 @@ export class AgentOrchestrator {
   async launchAgent(agentConfig: OrchestratedAgent): Promise<OrchestratedAgent> {
     // Use agentManager.deployAgent for real agent process
     agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
-    const agentHealth = {
-      lastHeartbeat: agentManager.getAgentLastHeartbeat(agentConfig.id),
-      lastActivity: agentManager.getAgentLastActivity(agentConfig.id),
-      crashCount: 0,
-    };
-    this.agentHealthMap[agentConfig.id] = agentHealth;
-    const agent: OrchestratedAgent = {
-      ...agentConfig,
-      status: 'healthy',
-      host: 'local',
-    };
-    this.agents.push(agent);
-    const logMsg = `Agent launched: ${agent.id}`;
+    const logMsg = `Agent launched: ${agentConfig.id}`;
     agentLogStore.addLog({
-      agentId: agent.id,
+      agentId: agentConfig.id,
       timestamp: Date.now(),
       level: 'info',
       message: logMsg,
     });
-    // Persist to Supabase
-    logAgentHealthToSupabase(agent.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
-    return agent;
+    logAgentHealthToSupabase(agentConfig.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
+    // Return the authoritative agent info from agentManager
+    const agent = agentManager.agents.get(agentConfig.id);
+    return agent as OrchestratedAgent;
   }
 
   /**
@@ -235,12 +223,6 @@ export class AgentOrchestrator {
     this.recoveryAttempts[agentId] = 0;
     // Stop the real agent process
     agentManager.stopAgent(agentId);
-    // Mark as crashed for compatibility
-    const agent = this.getAgent(agentId);
-    if (agent) {
-      agent.status = 'crashed';
-      // Do NOT remove agent from orchestrator's agent list; keep it for status tracking
-    }
     const logMsg = `Agent stopped`;
     agentLogStore.addLog({
       agentId,
@@ -310,7 +292,8 @@ export class AgentOrchestrator {
    * @returns The agent, or undefined if not found
    */
   getAgent(agentId: string): OrchestratedAgent | undefined {
-    return this.agents.find((a: OrchestratedAgent) => a.id === agentId);
+    // Always fetch agent info from agentManager
+    return agentManager.listAgents().find(a => a.id === agentId);
   }
 
   /**
@@ -331,12 +314,8 @@ export class AgentOrchestrator {
    * @returns Array of OrchestratedAgent
    */
   listAgents(): OrchestratedAgent[] {
-    return this.agents.map(agent => ({
-      ...agent,
-      lastHeartbeat: agentManager.getAgentLastHeartbeat(agent.id),
-      lastActivity: agentManager.getAgentLastActivity(agent.id),
-      health: agentManager.getAgentHealth(agent.id),
-    }));
+    // Always fetch agent list from agentManager
+    return agentManager.listAgents() as OrchestratedAgent[];
   }
 
   /**

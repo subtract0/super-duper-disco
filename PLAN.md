@@ -1,26 +1,8 @@
-# Project Backlog (PLAN.md)
+# Project Plan (PLAN.md)
 
-This backlog is maintained according to the [Cascade Autonomous Development Protocol](./Cascade_Autonomous_Development_Protocol.md). Each ticket below follows the protocol: clear objective, acceptance criteria, and recommended technical approach.
+This is the present and future roadmap for the Agent Broker system, maintained according to the [Cascade Autonomous Development Protocol](./Cascade_Autonomous_Development_Protocol.md).
 
----
-
-## Completed Tickets
-
-- [x] **Core Test: Text Message Flow**
-  - Ensure a text message sent to Telegram is processed, stored in Supabase, and replied to by the agent.
-- [x] **Core Test: File Upload Flow**
-  - Verify images/documents from Telegram are downloaded, uploaded to Supabase, and URLs are stored.
-- [x] **Core Test: Voice Transcription Flow**
-  - Confirm a voice message is transcribed using Whisper and the result is processed and replied to.
-- [x] **Core Test: OpenAI Integration**
-  - Ensure agent replies are generated and saved using OpenAI (mocked responses).
-- [x] **Core Test: Error Handling**
-  - Simulate failures (Supabase/OpenAI down) and verify error logging and user notification.
-
----
-
-### Failsafe Notation
-If any regression or failure is detected in the above completed tickets, immediately halt further development, open a critical issue, and prioritize fixing the regression before proceeding.
+**For all completed and historical tickets, see [`TICKETS_FROM_THE_PAST.md`](./TICKETS_FROM_THE_PAST.md).**
 
 ---
 
@@ -465,7 +447,3 @@ Design and implement a robust, production-grade multi-agent orchestration system
   - Deep research and refinement steps are followed for new features
 - **Recommended Approach:**
   - Review PLAN.md and all tickets for protocol compliance before implementation
-
----
-
-*Last updated: 2025-04-16*

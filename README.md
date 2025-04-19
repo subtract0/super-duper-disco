@@ -248,14 +248,14 @@ You can now launch your entire Telegram bot dev environment—including Next.js,
 
 **Step 2: Automatically set the Telegram webhook**
 ```powershell
-./set-telegram-webhook.ps1 <YOUR_BOT_TOKEN>
+./set-telegram-webhook.ps1
 ```
 - This script fetches the current ngrok public URL and sets your Telegram bot webhook to point to `/api/telegram`.
-- No manual copy-paste needed!
+- The bot token is read automatically from the `.env` file (TELEGRAM_BOT_TOKEN). No need to pass it as a parameter!
 
 **One-liner for full automation:**
 ```powershell
-./start-dev.ps1; ./set-telegram-webhook.ps1 <YOUR_BOT_TOKEN>
+./start-dev.ps1; ./set-telegram-webhook.ps1
 ```
 
 **Result:**
@@ -264,6 +264,8 @@ You can now launch your entire Telegram bot dev environment—including Next.js,
 
 **Troubleshooting:**
 - Only one ngrok tunnel per account/session is allowed on free accounts. If you get an error, close other ngrok sessions or use the ngrok dashboard to terminate old tunnels.
+- If you see "No HTTPS ngrok tunnel found. Is ngrok running?", ngrok may still be starting up. Wait a few seconds after running `./start-dev.ps1` before running `./set-telegram-webhook.ps1`.
+- You can check ngrok's status and see the public URL at [http://127.0.0.1:4040](http://127.0.0.1:4040) in your browser.
 - If your bot does not respond, make sure both scripts ran successfully and check that the webhook is set to the current ngrok URL.
 
 ## Deployment

@@ -67,8 +67,11 @@ export class BaseAgent {
 function createAgent(id: string, name: string, type: string, config: any): BaseAgent {
   switch (type) {
     case 'langchain': {
-      const { LangChainAgent } = require('./langchainAgent');
-      return new LangChainAgent(id, config.openAIApiKey || process.env.OPENAI_API_KEY);
+      let LangChainAgentCtor;
+      const imported = require('./langchainAgent');
+      LangChainAgentCtor = imported.LangChainAgent || imported.default;
+      if (!LangChainAgentCtor) throw new Error('LangChainAgent class not found in langchainAgent module');
+      return new LangChainAgentCtor(id, config.openAIApiKey || process.env.OPENAI_API_KEY);
     }
     case 'autogen': {
       const { AutoGenAgent } = require('./autoGenAgent');

@@ -149,10 +149,10 @@ export default async function handler(
         const agentId = `tg-${user_id}-${Date.now()}`;
         const launched = await orchestrator.launchAgent({
           id: agentId,
-          type: 'native',
+          type: 'langchain', // Use langchain so agent has chat method
           status: 'pending',
           host: 'telegram',
-          config: {},
+          config: { openAIApiKey: process.env.OPENAI_API_KEY }, // Pass OpenAI key
         });
         // Send the user's message to the agent and get a response
         let agentResponse = '';

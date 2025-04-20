@@ -196,7 +196,14 @@ export default async function handler(
     safeHistory = safeHistory.reverse();
 
     // Optionally, prepend a system prompt for better context retention
-    safeHistory.unshift({ role: 'system', content: 'You are a helpful assistant. Always use the conversation history above to answer as contextually as possible.' });
+    const systemPrompt = { role: 'system', content: 'You are a helpful assistant. Always use the conversation history above to answer as contextually as possible.' };
+    safeHistory.unshift(systemPrompt);
+
+    // Limit to last 10 messages (excluding system prompt)
+    if (safeHistory.length > 11) {
+      // Keep system prompt at the start, then last 10
+      safeHistory = [systemPrompt, ...safeHistory.slice(-10)];
+    }
 
     // Log the safeHistory after filtering and ordering
     console.log('[Telegram Handler] safeHistory after filtering:', safeHistory);

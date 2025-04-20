@@ -69,8 +69,7 @@ export class AgentMessageMemory {
     if ('updatedAt' in mcpEnvelope.body) {
       delete mcpEnvelope.body['updatedAt'];
     }
-    console.log('[AgentMessageMemory.save] Attempting to insert MCP envelope:', JSON.stringify(mcpEnvelope.body, null, 2));
-    console.log('[AgentMessageMemory.save] Using server-side client for insert');
+    // [AgentMessageMemory.save] Insert MCP envelope (info log suppressed for production cleanliness)
     const { data, error } = await supabaseServer.from(this.table)
       .insert([
         {
@@ -96,7 +95,7 @@ export class AgentMessageMemory {
     // Force thread_id to string if present
     if (thread_id && typeof thread_id !== 'string') thread_id = String(thread_id);
     if (user_id && typeof user_id !== 'string') user_id = String(user_id);
-    console.log('[AgentMessageMemory.fetchRecent] Fetching recent messages with params:', { thread_id, user_id, limit });
+    // [AgentMessageMemory.fetchRecent] Fetching recent messages (debug log suppressed for production cleanliness)
     let q = supabaseServer.from(this.table).select('*');
     if (thread_id) q = q.eq('thread_id', thread_id);
     if (user_id) q = q.eq('user_id', user_id);
@@ -120,7 +119,7 @@ export class AgentMessageMemory {
     }
     // TEMP: Bypass parseMCPEnvelope, just return row as body for memory to work
 const parsed = (data || []).map((row: any, idx: number) => {
-        console.log(`[AgentMessageMemory.fetchRecent] [DEBUG] Row ${idx} before parse:`, row);
+        // [AgentMessageMemory.fetchRecent] Row before parse (debug log suppressed)
         if (row.value && typeof row.value === 'string') {
           try { row.value = JSON.parse(row.value); } catch (e) {
             console.warn('[AgentMessageMemory.fetchRecent] Failed to parse value as JSON:', row.value, e);
@@ -128,12 +127,12 @@ const parsed = (data || []).map((row: any, idx: number) => {
         }
         // Bypass MCP parsing for now
         const env = { body: row };
-        console.log(`[AgentMessageMemory.fetchRecent] [DEBUG] Row ${idx} after MCP bypass:`, env);
+        // [AgentMessageMemory.fetchRecent] Row after MCP bypass (debug log suppressed)
         return env;
       })
       .filter((env: any) => !!env.body && typeof env.body.value?.role === 'string')
       .map((env) => env.body);
-console.log('[AgentMessageMemory.fetchRecent] [DEBUG] Returning parsed array:', parsed);
+// [AgentMessageMemory.fetchRecent] Returning parsed array (debug log suppressed)
 return parsed;
   }
 }

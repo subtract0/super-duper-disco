@@ -49,7 +49,7 @@ const staticIdeas = [
   { name: 'Joke Bot', description: 'Tells a new joke every day.', config: { type: 'jokebot' } },
 ];
 
-let cachedIdeas: AgentIdeaCard[] | null = null;
+const cachedIdeas: AgentIdeaCard[] | null = null;
 
 async function fetchAgentIdeasFromLLM(n: number = 3): Promise<AgentIdeaCard[]> {
   try {

@@ -40,7 +40,7 @@ describe('AgentManager (modular factory, isolated)', () => {
     // agentManager = new AgentManager(); // Use the singleton from agentManagerSingleton instead.
   });
   afterEach(() => {
-    agentManager.listAgents().forEach((agent: any) => agentManager.stopAgent(agent.id));
+    agentManager.listAgents().forEach((agent) => agentManager.stopAgent(agent.id));
   });
 
   it('should instantiate native, langchain, and autogen agents using factory', () => {

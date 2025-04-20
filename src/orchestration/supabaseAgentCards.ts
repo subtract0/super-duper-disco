@@ -39,7 +39,7 @@ export async function fetchAgentCards(n: number): Promise<AgentIdeaCard[]> {
     console.log('[supabaseAgentCards] Returning fallback card:', fallback);
     return fallback;
   }
-  let cards = data || [];
+  const cards = data || [];
   // If no cards, fallback
   if (cards.length === 0) {
     const fallback = [{

@@ -50,11 +50,14 @@ describe('AgentManager', () => {
   beforeEach(() => {
     // agentManager = new AgentManager(); // Use the singleton from agentManagerSingleton instead.
     // Reset state before each test
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('./persistentMemory').persistentMemory.clear();
   });
   afterEach(() => {
     // Ensure cleanup after each test
     agentManager.clearAllAgents();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('./persistentMemory').persistentMemory.clear();
   });
 
@@ -66,7 +69,7 @@ describe('AgentManager', () => {
     const id = 'crash-test-agent';
     agentManager.deployAgent(id, id, 'native', {});
     // Simulate missed heartbeat by manipulating lastHeartbeat
-    const agent = agentManager.listAgents().find(a => a.id === id);
+    const agent = agentManager.listAgents().find((a) => a.id === id);
     if (agent) {
       agent.lastHeartbeat = Date.now() - 20000; // 20s ago
       agent.status = 'running';
@@ -79,11 +82,13 @@ describe('AgentManager', () => {
   beforeEach(() => {
     // Reset state before each test
     agentManager.clearAllAgents();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('./persistentMemory').persistentMemory.clear();
   });
   afterEach(() => {
     // Ensure cleanup after each test
     agentManager.clearAllAgents();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     require('./persistentMemory').persistentMemory.clear();
   });
 
@@ -114,7 +119,7 @@ describe('AgentManager', () => {
     const id = 'test-agent-2';
     await agentManager.deployAgent(id, id, 'native');
     await agentManager.stopAgent(id);
-    const agent = agentManager.listAgents().find(a => a.id === id);
+    const agent = agentManager.listAgents().find((a) => a.id === id);
     if (!agent) {
       throw new Error(`Agent not found after stop. Current agents: ${JSON.stringify(agentManager.listAgents())}`);
     }

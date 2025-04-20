@@ -1,8 +1,8 @@
 import { AgentHealth } from '../orchestration/orchestrator/types';
 
 export function getHealthDisplay(health: AgentHealth) {
-  let status = health.status;
-  let anomaly = '';
+  const status = health.status;
+  const anomaly = '';
   let color = '';
   if (status === 'crashed') {
     color = '#ffeaea';
@@ -22,7 +22,7 @@ export function getHealthDisplay(health: AgentHealth) {
     anomaly = 'Unknown';
   }
   // Highlight high crash count or low uptime
-  let crashStyle = health.crashCount !== undefined && health.crashCount > 2 ? { color: '#b00', fontWeight: 600 } : {};
-  let uptimeStyle = health.uptime !== undefined && health.uptime < 60000 ? { color: '#b00', fontWeight: 600 } : {};
+  const crashStyle = (health.crashCount !== undefined && health.crashCount > 2) ? { color: '#b00', fontWeight: 600 } as const : {} as const;
+  const uptimeStyle = (health.uptime !== undefined && health.uptime < 60000) ? { color: '#b00', fontWeight: 600 } as const : {} as const;
   return { status, anomaly, color, crashStyle, uptimeStyle };
 }

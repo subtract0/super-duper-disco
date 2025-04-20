@@ -9,8 +9,20 @@ export async function sendSlackNotification(message: string, webhookUrl: string)
   });
 }
 
-export async function sendEmailNotification(subject: string, body: string, to: string, smtpConfig: any) {
-  // Placeholder: Implement using nodemailer or similar
+/**
+ * Placeholder for email notification. Implement using nodemailer or similar.
+ * @param subject - Email subject
+ * @param body - Email body
+ * @param to - Recipient address
+ * @param smtpConfig - SMTP configuration (unused)
+ */
+export async function sendEmailNotification(
+  subject: string,
+  body: string,
+  to: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  smtpConfig: unknown
+): Promise<void> {
   // Example: await transporter.sendMail({ from, to, subject, text: body });
   return Promise.resolve();
 }

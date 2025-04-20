@@ -28,7 +28,7 @@ describe('AgentOrchestrator', () => {
     };
     await orchestrator.launchAgent(agentConfig);
     // Should be running in agentManager
-    const agentInfo = agentManager.listAgents().find(a => a.id === agentConfig.id);
+    const agentInfo = agentManager.listAgents().find((a) => a.id === agentConfig.id);
     expect(agentInfo).toBeDefined();
     expect(agentInfo!.status).toBe('running');
     // Orchestrator health should be healthy
@@ -45,7 +45,7 @@ describe('AgentOrchestrator', () => {
     };
     await orchestrator.launchAgent(agentConfig);
     await orchestrator.stopAgent(agentConfig.id);
-    const agentInfo = agentManager.listAgents().find(a => a.id === agentConfig.id);
+    const agentInfo = agentManager.listAgents().find((a) => a.id === agentConfig.id);
     expect(agentInfo).toBeDefined();
     expect(agentInfo!.status).toBe('stopped');
     // Orchestrator health should be crashed
@@ -62,7 +62,7 @@ describe('AgentOrchestrator', () => {
     };
     await orchestrator.launchAgent(agentConfig);
     const agents = orchestrator.listAgents();
-    expect(agents.some(a => a.id === agentConfig.id)).toBe(true);
+    expect(agents.some((a) => a.id === agentConfig.id)).toBe(true);
   });
 
 
@@ -90,6 +90,6 @@ describe('AgentOrchestrator', () => {
     expect(orchestrator.getHealth(agentConfig.id)).toBe('recovered');
     // Check agent is still present in orchestrator list
     const agents = orchestrator.listAgents();
-    expect(agents.some(a => a.id === agentConfig.id)).toBe(true);
+    expect(agents.some((a) => a.id === agentConfig.id)).toBe(true);
   });
 });

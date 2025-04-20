@@ -48,6 +48,15 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
 
 ---
 
+## Milestone (2025-04-20): Telegram Agent Management Test Suite Unblocked, Failing Tests Remain
+
+- **Context:** Patched `telegram.commands.test.ts` to mock `orchestratorSingleton` before handler import, following the working pattern from `telegram-agent-commands.test.ts`.
+- **Result:** Jest transform/import error resolved. Test suite now runs, but several tests fail (6 failed, 4 passed).
+- **Next Step:** Diagnose and fix failing test assertions for Telegram agent management edge cases. Focus on correct user notification and agent state handling.
+- **Action:** Proceed to review failing test output, update tests or mocks as needed, and document fixes.
+
+---
+
 ## Milestone (2025-04-20): Telegram Agent Management Test Suite Blocked
 
 - **Context:** Added comprehensive tests for Telegram agent management edge cases (`telegram.commands.test.ts`).

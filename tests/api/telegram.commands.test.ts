@@ -1,4 +1,41 @@
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
+process.env.TELEGRAM_BOT_TOKEN = 'dummy-bot-token';
+process.env.OPENAI_API_KEY = 'dummy-openai-key';
 import { createMocks } from 'node-mocks-http';
+
+// Mock orchestratorSingleton before importing handler (for Jest/Next.js transform compatibility)
+// In-memory agent list for orchestrator mock
+let agents: any[] = [];
+
+jest.mock('../../src/orchestration/orchestratorSingleton', () => ({
+  orchestrator: {
+    getSwarmState: jest.fn(() => ({ agents })),
+    stopAgent: jest.fn(async (id: string) => {
+      const idx = agents.findIndex(a => a.id === id);
+      if (idx === -1) throw new Error('Agent not found');
+      agents.splice(idx, 1);
+      return true;
+    }),
+    restartAgent: jest.fn(async (id: string) => {
+      const agent = agents.find(a => a.id === id);
+      if (!agent) throw new Error('Agent not found');
+      agent.status = 'running';
+      return 'running';
+    }),
+    launchAgent: jest.fn(async (agentConfig: any) => {
+      agents.push({ ...agentConfig, status: 'running' });
+      return { ...agentConfig, status: 'running' };
+    }),
+    updateAgentConfig: jest.fn(async (id: string, config: any) => {
+      const agent = agents.find(a => a.id === id);
+      if (!agent) throw new Error('Agent not found');
+      agent.config = config;
+      return true;
+    }),
+    reset: jest.fn(() => { agents = []; }),
+  },
+}));
 import handler from '../../pages/api/telegram';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 import axios from 'axios';
@@ -73,6 +110,8 @@ describe('Telegram bot agent commands', () => {
 
   it('prompts for missing agent id in natural language stop request', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // Ensure orchestrator has no agents for this test
+    orchestrator.reset();
     const { req, res } = createMocks({
       method: 'POST',
       body: { message: { chat: { id: 15 }, from: { id: 25 }, message_id: 40, text: 'please stop my agent' } },
@@ -89,6 +128,8 @@ describe('Telegram bot agent commands', () => {
 
   it('prompts for config JSON in update-config request', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // Launch agent so handler recognizes the ID
+    await orchestrator.launchAgent({ id: 'x1', type: 'native', status: 'pending', host: 'test', config: {} });
     const { req, res } = createMocks({
       method: 'POST',
       body: { message: { chat: { id: 16 }, from: { id: 26 }, message_id: 41, text: 'update config for agent x1' } },
@@ -105,6 +146,8 @@ describe('Telegram bot agent commands', () => {
 
   it('confirms config update on valid config', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // Launch agent so handler recognizes the ID
+    await orchestrator.launchAgent({ id: 'y1', type: 'native', status: 'pending', host: 'test', config: {} });
     // First message triggers prompt for config
     let { req, res } = createMocks({
       method: 'POST',
@@ -128,7 +171,13 @@ describe('Telegram bot agent commands', () => {
   });
 
   it('notifies user if config update fails', async () => {
-    jest.spyOn(orchestrator, 'updateAgentConfig').mockResolvedValue(false);
+    // Launch agent so handler recognizes the ID
+    await orchestrator.launchAgent({ id: 'z1', type: 'native', status: 'pending', host: 'test', config: {} });
+    // Patch updateAgentConfig to return false only for z1+fail
+    jest.spyOn(orchestrator, 'updateAgentConfig').mockImplementation(async (id: string, config: any) => {
+      if (id === 'z1' && config.foo === 'fail') return false;
+      return true;
+    });
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
     // First message triggers prompt for config
     let { req, res } = createMocks({
@@ -154,6 +203,8 @@ describe('Telegram bot agent commands', () => {
 
   it('notifies user if config JSON is malformed', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // Launch agent so handler recognizes the ID
+    await orchestrator.launchAgent({ id: 'badjson', type: 'native', status: 'pending', host: 'test', config: {} });
     // Prompt for config
     let { req, res } = createMocks({
       method: 'POST',

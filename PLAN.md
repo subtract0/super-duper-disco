@@ -48,6 +48,24 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
 
 ---
 
+## Milestone (2025-04-20): Orchestrator Agent Status Alignment
+
+- **Context:** Orchestrator mock now aligns agent status to 'running' for all agent lifecycle events, matching Telegram handler expectations for /status and agent management commands.
+- **Result:** Status, restart, and config update tests now reflect correct status strings. This resolves mismatches between test agent state and handler output.
+- **Next Step:** Review handler logic and test expectations for config update and malformed JSON conversational tests, as they still return generic fallback error messages.
+- **Action:** Proceed to review handler and patch tests or handler as needed. Update PLAN.md and TESTING.md after each fix.
+
+---
+
+## Milestone (2025-04-20): Telegram Agent Management Conversational Config Tests Patched
+
+- **Context:** Patched conversational config update and malformed JSON tests to launch agents with correct IDs before running handler, ensuring handler recognizes agent IDs.
+- **Result:** Tests now surface correct conversational prompts and actionable error messages for config update and malformed JSON cases.
+- **Next Step:** Review and patch natural language stop test if needed, then re-run tests and document results.
+- **Action:** Proceed to review and patch natural language stop test, update PLAN.md and TESTING.md after each fix.
+
+---
+
 ## Milestone (2025-04-20): Telegram Agent Management Test Suite Orchestrator Mock Realigned
 
 - **Context:** Orchestrator mock in `telegram.commands.test.ts` now maintains a mutable in-memory agent list, matching agent lifecycle flows in tests.

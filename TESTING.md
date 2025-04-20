@@ -60,6 +60,13 @@ This document consolidates best practices, patterns, and insights gathered while
 - Validate both HTTP response code and JSON payload.
 - Assert side-effects: e.g., `expect(axios.post).toHaveBeenCalledWith('/sendMessage', ...)`.
 
+## Telegram Bot Testing Log
+
+### Milestone (2025-04-20): Orchestrator Agent Status Alignment
+- The orchestrator mock now sets agent status to 'running' for all lifecycle events, matching the Telegram handler's expectations for /status and agent management commands.
+- Status, restart, and config update tests now reflect correct status strings and pass as expected.
+- Next: Review Telegram handler logic and test expectations for conversational config update and malformed JSON tests, which still return fallback error messages instead of specific prompts/errors.
+
 ## End-to-End (E2E) Tests
 
 - Use React Testing Library for component interactions.

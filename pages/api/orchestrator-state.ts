@@ -21,9 +21,14 @@ export default function handler(req: any, res: any) {
     logs = (agentLogStore as any).getAllLogs();
   }
   logs = logs.sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 50);
+  // Expose the live message bus (A2A envelopes) for collaboration monitoring
+  const messages = typeof orchestrator.getSwarmState === 'function'
+    ? (orchestrator.getSwarmState().messages || [])
+    : (orchestrator.messageBus || []);
   res.status(200).json({
     state: 'live',
     health,
-    logs
+    logs,
+    messages
   });
 }

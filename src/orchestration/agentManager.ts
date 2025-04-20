@@ -189,6 +189,14 @@ class AgentManager {
     return info ? info.instance?.getLogs() : [];
   }
 
+  // Test helper: set logs for an agent (for integration testing)
+  setAgentLogs(id: string, logs: string[]) {
+    const info = this.agents.get(id);
+    if (info && info.instance) {
+      info.instance.logs = logs;
+    }
+  }
+
   listAgents() {
     return Array.from(this.agents.values());
   }

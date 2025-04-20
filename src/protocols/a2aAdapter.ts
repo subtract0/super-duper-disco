@@ -56,7 +56,13 @@ export function buildA2AEnvelope({
  */
 export function parseA2AEnvelope(msg: any): A2AEnvelope {
   if (!msg || msg.protocol !== 'A2A') throw new Error('Not an A2A message');
-  // Optionally: verify signature, check required fields
+  // Strictly require all protocol fields
+  const requiredFields = ['type', 'from', 'to', 'body', 'id', 'createdAt'];
+  for (const field of requiredFields) {
+    if (msg[field] === undefined || msg[field] === null) {
+      throw new Error(`Missing required field: ${field}`);
+    }
+  }
   if (!msg.version) msg.version = '1';
   return msg as A2AEnvelope;
 }

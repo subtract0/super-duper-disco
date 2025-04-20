@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 jest.mock('./supabaseAgentOps', () => ({
   logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),

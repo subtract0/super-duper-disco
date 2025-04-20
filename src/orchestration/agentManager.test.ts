@@ -27,6 +27,10 @@ jest.mock('./supabaseAgentOps', () => ({
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
 }));
 
+/**
+ * @jest-environment node
+ */
+
 import { agentManager } from './agentManager';
 jest.mock('./persistentMemory', () => {
   const records: any[] = [];

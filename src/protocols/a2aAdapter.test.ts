@@ -63,4 +63,59 @@ describe('A2A Protocol Compliance', () => {
     expect(envelope.threadId).toBeUndefined();
     expect(envelope.signature).toBeUndefined();
   });
+
+  it('should throw on missing required fields', () => {
+    const { parseA2AEnvelope } = require('./a2aAdapter');
+    expect(() => parseA2AEnvelope({})).toThrow();
+    expect(() => parseA2AEnvelope({ protocol: 'A2A' })).toThrow();
+    expect(() => parseA2AEnvelope({ protocol: 'A2A', from: 'a' })).toThrow();
+  });
+
+  it('should handle unknown/future protocol versions gracefully', () => {
+    const { buildA2AEnvelope, parseA2AEnvelope } = require('./a2aAdapter');
+    const envelope = buildA2AEnvelope({ type: 'task', from: 'a', to: 'b', body: {}, version: '999' });
+    const parsed = parseA2AEnvelope(envelope);
+    expect(parsed.version).toBe('999');
+  });
+
+  it('should handle large and deep payloads', () => {
+    const { buildA2AEnvelope, parseA2AEnvelope } = require('./a2aAdapter');
+    const largeBody = { arr: Array(1000).fill({ foo: 'bar', nested: { x: 42 } }) };
+    const envelope = buildA2AEnvelope({ type: 'task', from: 'a', to: 'b', body: largeBody });
+    const parsed = parseA2AEnvelope(envelope);
+    expect(parsed.body.arr.length).toBe(1000);
+    expect(parsed.body.arr[0].nested.x).toBe(42);
+  });
+
+  it('should reject envelopes with protocol MCP (interoperability check)', () => {
+    const { parseA2AEnvelope } = require('./a2aAdapter');
+    expect(() => parseA2AEnvelope({ protocol: 'MCP', from: 'a', to: 'b', type: 'task', body: {} })).toThrow();
+  });
+
+  it('should handle missing/invalid signature and threadId fields', () => {
+    const { buildA2AEnvelope, parseA2AEnvelope } = require('./a2aAdapter');
+    const env = buildA2AEnvelope({ type: 'task', from: 'a', to: 'b', body: {}, signature: 123, threadId: null });
+    const parsed = parseA2AEnvelope(env);
+    expect(parsed.signature).toBe(123);
+    expect(parsed.threadId).toBeNull();
+  });
+
+  it('should not crash on random/fuzzed input', () => {
+    const { parseA2AEnvelope } = require('./a2aAdapter');
+    const fuzzInputs = [
+      null,
+      undefined,
+      42,
+      'string',
+      { protocol: 'A2A', type: 123, from: [], to: {}, body: () => {} },
+      { protocol: 'A2A', type: 'task', from: 'a', to: 'b', body: Symbol('bad') },
+    ];
+    for (const input of fuzzInputs) {
+      try {
+        parseA2AEnvelope(input);
+      } catch (e) {
+        expect(e).toBeInstanceOf(Error);
+      }
+    }
+  });
 });

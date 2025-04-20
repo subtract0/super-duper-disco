@@ -70,4 +70,85 @@ describe('Telegram bot agent commands', () => {
     const [, payload] = sendCall!;
     expect(payload.text).toMatch(/✅ Agent r1 restarted: \w+/);
   });
+
+  it('prompts for missing agent id in natural language stop request', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 15 }, from: { id: 25 }, message_id: 40, text: 'please stop my agent' } },
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(15);
+    expect(payload.text).toMatch(/which agent/i);
+  });
+
+  it('prompts for config JSON in update-config request', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 16 }, from: { id: 26 }, message_id: 41, text: 'update config for agent x1' } },
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(16);
+    expect(payload.text).toMatch(/send the new config/i);
+  });
+
+  it('confirms config update on valid config', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // First message triggers prompt for config
+    let { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 17 }, from: { id: 27 }, message_id: 42, text: 'update config for agent y1' } },
+    });
+    await handler(req, res);
+    // Second message provides config JSON
+    req = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 17 }, from: { id: 27 }, message_id: 43, text: '{ "foo": "bar" }' } },
+    }).req;
+    res = createMocks({ method: 'POST' }).res;
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.reverse().find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(17);
+    expect(payload.text).toMatch(/config updated/i);
+  });
+
+  it('notifies user if config update fails', async () => {
+    jest.spyOn(orchestrator, 'updateAgentConfig').mockResolvedValue(false);
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // First message triggers prompt for config
+    let { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 18 }, from: { id: 28 }, message_id: 44, text: 'update config for agent z1' } },
+    });
+    await handler(req, res);
+    // Second message provides config JSON
+    req = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 18 }, from: { id: 28 }, message_id: 45, text: '{ "foo": "fail" }' } },
+    }).req;
+    res = createMocks({ method: 'POST' }).res;
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.reverse().find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(18);
+    expect(payload.text).toMatch(/failed to update config/i);
+  });
 });

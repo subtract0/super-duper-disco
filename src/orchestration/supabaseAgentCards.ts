@@ -97,7 +97,10 @@ export async function insertAgentCard(card: Omit<AgentIdeaCard, 'id' | 'elo' | '
       .single();
     if (error) {
       console.error('[supabaseAgentCards] insertAgentCard error:', error, 'card:', toInsert);
-      throw error;
+      // Log relevant env for debugging
+      console.error('[supabaseAgentCards] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+      console.error('[supabaseAgentCards] Supabase ANON KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '[REDACTED]' : '[MISSING]');
+      throw new Error(`[supabaseAgentCards] Failed to insert agent card: ${error.message || error}`);
     }
     return {
       id: typeof data.id === 'string' ? data.id : '',

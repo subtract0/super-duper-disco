@@ -38,12 +38,35 @@ import { agentLogStore } from './agentLogs';
 import { agentHealthStore, AgentHealthStatus } from './agentHealth';
 import { agentManager } from './agentManager';
 import { logAgentHealthToSupabase } from './supabaseAgentOps';
+import { sendSlackNotification } from '../utils/notify';
 
 import { QCAgent } from './agents/qcAgent';
 import { BuilderAgent } from './agents/builderAgent';
 import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 type AgentCapability = string;
+
+// Track last notified status per agent (in-memory)
+const lastNotifiedStatus: Record<string, AgentHealthStatus> = {};
+
+if (typeof process !== 'undefined' && process.env && process.env.SLACK_WEBHOOK_URL) {
+  agentHealthStore.onNotification(async (agentId, status) => {
+    if (
+      (status === 'crashed' || status === 'unresponsive' || status === 'recovery_failed') &&
+      lastNotifiedStatus[agentId] !== status
+    ) {
+      lastNotifiedStatus[agentId] = status;
+      try {
+        await sendSlackNotification(
+          `:rotating_light: Agent '${agentId}' status changed to *${status}* at ${new Date().toLocaleString()}`,
+          process.env.SLACK_WEBHOOK_URL as string
+        );
+      } catch (err) {
+        // Optionally log notification failures
+      }
+    }
+  });
+}
 
 export class AgentOrchestrator {
   /**
@@ -142,6 +165,24 @@ export class AgentOrchestrator {
       // Optionally: threadId, signature, etc.
     });
     this.messageBus.push(envelope);
+
+    // Persist the message as a Model Context Protocol envelope for traceability/context
+    const mcp = (this as any).agentMessageMemory || agentMessageMemory;
+    try {
+      await mcp.save({
+        type: 'a2a',
+        content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+        role: 'agent',
+        provenance: 'a2a-protocol',
+        thread_id: `${msg.from}->${msg.to}`,
+        agent_id: msg.to,
+        user_id: msg.from,
+        tags: ['a2a', 'protocol', 'agent-message'],
+        // Optionally add timestamp, etc.
+      });
+    } catch (err) {
+      console.error('[Orchestrator][A2A->MCP] Failed to persist A2A message to MCP:', err);
+    }
   }
   // TODO: Update getAgentMessages and all consumers to parse/filter A2AEnvelope
 
@@ -432,5 +473,48 @@ export class AgentOrchestrator {
     this.agentHealthMap = {};
     this.messageBus = [];
     this.recoveryAttempts = {};
+    /**
+   * Update the config of a running agent.
+   * Updates the AgentManager's in-memory agent info and, if possible, calls setConfig on the agent instance.
+   * Also persists to persistent memory.
+   * @param agentId The agent's unique ID
+   * @param newConfig The new config object
+   * @returns true if successful, false otherwise
+   */
+  async updateAgentConfig(agentId: string, newConfig: any): Promise<boolean> {
+    const info = agentManager.agents.get(agentId);
+    if (!info) return false;
+    info.config = { ...info.config, ...newConfig };
+    if (info.instance && typeof info.instance.setConfig === 'function') {
+      try {
+        await info.instance.setConfig(info.config);
+      } catch (e) {
+        // fallback: ignore if not implemented
+      }
+    }
+    // Optionally log config update
+    try {
+      const { persistentMemory } = require('./persistentMemory');
+      await persistentMemory.save({
+        type: 'agent_state',
+        content: {
+          id: info.id,
+          name: info.name,
+          type: info.type,
+          status: info.status,
+          config: info.config,
+          logs: info.logs,
+          lastHeartbeat: info.lastHeartbeat,
+          lastActivity: info.lastActivity,
+          crashCount: info.crashCount,
+          updatedAt: Date.now(),
+        },
+        tags: ['agent', info.type, info.id, 'config-update'],
+      });
+    } catch (err) {
+      // If persistent memory fails, continue
+    }
+    return true;
   }
 }
+

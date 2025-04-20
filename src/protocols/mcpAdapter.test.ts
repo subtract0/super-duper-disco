@@ -68,4 +68,71 @@ describe('Model Context Protocol (MCP) Envelope Compliance', () => {
     expect(env.signature).toBeUndefined();
     expect(env.version).toBe('1');
   });
+
+  it('should throw on missing required fields', () => {
+    const { parseMCPEnvelope } = require('./mcpAdapter');
+    expect(parseMCPEnvelope({})).toBeNull();
+    expect(parseMCPEnvelope({ protocol: 'MCP' })).toBeNull();
+    expect(parseMCPEnvelope({ protocol: 'MCP', from: 'a' })).toBeNull();
+  });
+
+  it('should handle unknown/future protocol versions gracefully', () => {
+    const { buildMCPEnvelope, parseMCPEnvelope } = require('./mcpAdapter');
+    const env = buildMCPEnvelope({ type: 'fetch', from: 'a', to: 'b', body: {}, version: '999' });
+    const parsed = parseMCPEnvelope(env);
+    expect(parsed!.version).toBe('999');
+  });
+
+  it('should handle large and deep payloads', () => {
+    const { buildMCPEnvelope, parseMCPEnvelope } = require('./mcpAdapter');
+    const largeBody = { arr: Array(1000).fill({ foo: 'bar', nested: { x: 42 } }) };
+    const env = buildMCPEnvelope({ type: 'fetch', from: 'a', to: 'b', body: largeBody });
+    const parsed = parseMCPEnvelope(env);
+    expect(parsed!.body.arr.length).toBe(1000);
+    expect(parsed!.body.arr[0].nested.x).toBe(42);
+  });
+
+  it('should reject envelopes with protocol A2A (interoperability check)', () => {
+    const { parseMCPEnvelope } = require('./mcpAdapter');
+    expect(parseMCPEnvelope({ protocol: 'A2A', from: 'a', to: 'b', type: 'fetch', body: {} })).toBeNull();
+  });
+
+  it('should handle missing/invalid signature and threadId fields', () => {
+    const { buildMCPEnvelope, parseMCPEnvelope } = require('./mcpAdapter');
+    const env = buildMCPEnvelope({ type: 'fetch', from: 'a', to: 'b', body: {}, signature: 123, threadId: null });
+    const parsed = parseMCPEnvelope(env);
+    expect(parsed!.signature).toBe(123);
+    expect(parsed!.threadId).toBeNull();
+  });
+
+  it('should not crash on random/fuzzed input', () => {
+    const { parseMCPEnvelope } = require('./mcpAdapter');
+    const fuzzInputs = [
+      null,
+      undefined,
+      42,
+      'string',
+      { protocol: 'MCP', type: 123, from: [], to: {}, body: () => {} },
+      { protocol: 'MCP', type: 'fetch', from: 'a', to: 'b', body: Symbol('bad') },
+    ];
+    for (const input of fuzzInputs) {
+      try {
+        const result = parseMCPEnvelope(input);
+        expect(result === null || typeof result === 'object').toBe(true);
+      } catch (e) {
+        expect(e).toBeInstanceOf(Error);
+      }
+    }
+  });
+
+    const env = buildMCPEnvelope({
+      type: 'broadcast',
+      from: 'a',
+      to: 'b',
+      body: {},
+    });
+    expect(env.threadId).toBeUndefined();
+    expect(env.signature).toBeUndefined();
+    expect(env.version).toBe('1');
+  });
 });

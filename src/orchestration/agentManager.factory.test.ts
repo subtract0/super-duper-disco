@@ -28,6 +28,10 @@ jest.mock('./supabaseAgentOps', () => ({
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
 }));
 
+/**
+ * @jest-environment node
+ */
+
 import { agentManager } from './agentManager';
 
 describe('AgentManager (modular factory, isolated)', () => {

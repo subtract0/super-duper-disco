@@ -5,11 +5,29 @@ import {
   mockSupabaseClient, mockedAxios, isSendMessage,
 } from './helpers';
 import { orchestrator } from '../src/orchestration/orchestratorSingleton';
+import { EventEmitter } from 'events';
+import { EventEmitter } from 'events';
+
+// Minimal BaseAgent stub for EventEmitter compatibility
+class TestAgent extends EventEmitter {
+  id: string;
+  status: string = 'running';
+  constructor(id: string) {
+    super();
+    this.id = id;
+  }
+  stop() { this.status = 'stopped'; }
+  start() { this.status = 'running'; }
+}
 
 describe('Agent control commands', () => {
 
   beforeAll(() => {
-    orchestrator.getSwarmState.mockReturnValue({ agents: [{ id: AGENT_ID, status: 'healthy' }] });
+    // Patch orchestrator agent mocks to use EventEmitter-compatible TestAgent
+    orchestrator.getSwarmState.mockReturnValue({ agents: [{ id: AGENT_ID, status: 'healthy', instance: new TestAgent(AGENT_ID) }] });
+    orchestrator.getAgent = jest.fn((id: string) => (id === AGENT_ID ? { id: AGENT_ID, status: 'healthy', instance: new TestAgent(AGENT_ID) } : undefined));
+    orchestrator.stopAgent = jest.fn(() => Promise.resolve());
+    orchestrator.restartAgent = jest.fn(() => Promise.resolve('healthy'));
   });
 
   afterAll(resetTestEnv);

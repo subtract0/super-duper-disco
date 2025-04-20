@@ -58,6 +58,12 @@ export function updateModelContext(obj: ModelContextObject, newValue: any): Mode
 /**
  * Validate a Model Context object
  */
-export function validateModelContext(obj: any): boolean {
-  return obj && typeof obj.id === 'string' && typeof obj.type === 'string' && typeof obj.version === 'string';
+export function validateModelContext(obj: unknown): boolean {
+  if (typeof obj !== 'object' || obj === null) return false;
+  const o = obj as { id?: unknown; type?: unknown; version?: unknown };
+  return (
+    typeof o.id === 'string' &&
+    typeof o.type === 'string' &&
+    typeof o.version === 'string'
+  );
 }

@@ -118,10 +118,10 @@ export class AgentMessageMemory {
       return [];
     }
     // TEMP: Bypass parseMCPEnvelope, just return row as body for memory to work
-const parsed = (data || []).map((row: any, idx: number) => {
+const parsed = (data || []).map((row: unknown, idx: number) => {
         // [AgentMessageMemory.fetchRecent] Row before parse (debug log suppressed)
-        if (row.value && typeof row.value === 'string') {
-          try { row.value = JSON.parse(row.value); } catch (e) {
+        if (row && typeof row === 'object' && 'value' in row && typeof (row as any).value === 'string') {
+          try { (row as any).value = JSON.parse((row as any).value); } catch (e) {
             console.warn('[AgentMessageMemory.fetchRecent] Failed to parse value as JSON:', row.value, e);
           }
         }
@@ -130,10 +130,14 @@ const parsed = (data || []).map((row: any, idx: number) => {
         // [AgentMessageMemory.fetchRecent] Row after MCP bypass (debug log suppressed)
         return env;
       })
-      .filter((env: any) => !!env.body && typeof env.body.value?.role === 'string')
-      .map((env) => env.body);
-// [AgentMessageMemory.fetchRecent] Returning parsed array (debug log suppressed)
-return parsed;
+      .filter((env: { body: unknown }) => {
+        if (!env.body || typeof env.body !== 'object' || env.body === null) return false;
+        const body = env.body as { value?: unknown };
+        return typeof body.value === 'object' && body.value !== null && 'role' in body.value && typeof (body.value as { role?: unknown }).role === 'string';
+      })
+      .map((env: { body: unknown }) => env.body);
+    // [AgentMessageMemory.fetchRecent] Returning parsed array (debug log suppressed)
+    return parsed;
   }
 }
 

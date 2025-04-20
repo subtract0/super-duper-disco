@@ -1,3 +1,4 @@
+import 'openai/shims/node';
 /* Shared helpers & global mocks for the pages/api/telegram test‑suite */
 
 import axios from 'axios';

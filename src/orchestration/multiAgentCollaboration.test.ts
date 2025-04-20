@@ -61,9 +61,9 @@ describe('Multi-Agent Collaboration (A2A Protocol)', () => {
 
   it('should persist A2A messages as MCP envelopes for traceability', async () => {
     // Mock agentMessageMemory.save to track calls
-    const orchestratorAny = orchestrator as any;
     const saveMock = jest.fn().mockResolvedValue(undefined);
-    orchestratorAny.agentMessageMemory = { save: saveMock };
+    // @ts-expect-error: Overriding for test
+    orchestrator.agentMessageMemory = { save: saveMock };
     await agentManager.deployAgent('agentA', 'Agent A', 'native', {});
     await agentManager.deployAgent('agentB', 'Agent B', 'native', {});
     await orchestrator.sendAgentMessage({

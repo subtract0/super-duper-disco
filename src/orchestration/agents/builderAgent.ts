@@ -13,11 +13,11 @@ export class BuilderAgent {
     this.logs.push(`[${new Date().toISOString()}] Received request: ${request}`);
     // Use OpenAI to break down the feature request into tickets
     const systemPrompt = 'Break down the following feature request into discrete development tickets.';
-    const messages = [
+    const messages: { role: string; content: string }[] = [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: request },
     ];
-    const response = await callOpenAIGPT(messages as any);
+    const response = await callOpenAIGPT(messages);
     // Split response into lines as tickets
     const tickets = response
       .split(/\r?\n/)

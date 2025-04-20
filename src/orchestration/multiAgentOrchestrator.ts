@@ -8,7 +8,7 @@ import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 type AgentHealth = "pending" | "healthy" | "crashed" | "recovering";
 
 export class MultiAgentOrchestrator {
-  agentIds = ["planner", "researcher", "developer", "devops"];
+  agentIds: string[] = ["planner", "researcher", "developer", "devops"];
   state: string = "idle";
 
   constructor(openAIApiKey: string) {
@@ -20,13 +20,13 @@ export class MultiAgentOrchestrator {
     agentManager.deployAgent("devops", "DevOps Agent", "langchain", { openAIApiKey });
     for (const id of this.agentIds) {
       const info = agentManager.agents.get(id);
-      if (info && info.instance.start) info.instance.start();
+      if (info && info.instance && typeof info.instance.start === 'function') info.instance.start();
     }
   }
 
-  private getHealth(agent: string): string {
+  private getHealth(agent: string): AgentHealth {
     const info = agentManager.agents.get(agent);
-    return info ? info.status : "unknown";
+    return info ? info.status as AgentHealth : "unknown";
   }
 
   private getLogs(agent: string): string[] {
@@ -34,7 +34,7 @@ export class MultiAgentOrchestrator {
     return info ? info.logs : [];
   }
 
-  private async safeCall(agent: string, fn: () => Promise<any>): Promise<any> {
+  private async safeCall(agent: string, fn: () => Promise<string>): Promise<string> {
     try {
       const result = await fn();
       return result;

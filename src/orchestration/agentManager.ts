@@ -65,12 +65,14 @@ export class AgentManager {
     // @ts-expect-error: _heartbeatListener is used for test cleanup
     (agent as BaseAgent)._heartbeatListener = heartbeatListener;
     // Set health to healthy
-    try {
-      const { agentHealthStore } = require('./agentHealth');
-      agentHealthStore.setHealth(id, 'healthy');
-    } catch (e) {
-      // ignore if agentHealthStore is not available
-    }
+    (async () => {
+      try {
+        const mod = await import('./agentHealth');
+        mod.agentHealthStore.setHealth(id, 'healthy');
+      } catch (e) {
+        // ignore if agentHealthStore is not available
+      }
+    })();
     this.agents.set(id, {
       id,
       name,
@@ -121,9 +123,6 @@ export class AgentManager {
   setAgentLogs(id: string, logs: string[]) {
     const info = this.agents.get(id);
     if (info && info.instance) {
-      if (typeof info.instance.setLogs === 'function') {
-        info.instance.setLogs(logs);
-      }
       // Only update the info.logs field, not instance internals
       info.logs = logs;
       // Ensure logs are synced after setting
@@ -147,12 +146,14 @@ export class AgentManager {
       info.status = 'stopped';
       info.lastActivity = Date.now();
       // Set health to crashed
-      try {
-        const { agentHealthStore } = require('./agentHealth');
-        agentHealthStore.setHealth(id, 'crashed');
-      } catch (e) {
-        // ignore if agentHealthStore is not available
-      }
+      (async () => {
+        try {
+          const { agentHealthStore } = await import('./agentHealth');
+          agentHealthStore.setHealth(id, 'crashed');
+        } catch (e) {
+          // ignore if agentHealthStore is not available
+        }
+      })();
       // Debug log
       console.log(`[AgentManager] stopAgent: Agent ${id} stopped. Status is now`, info.status);
     } else {
@@ -211,16 +212,17 @@ export class AgentManager {
       if (info && info.instance && typeof info.instance.stop === 'function') {
         info.instance.stop();
         // Set health to crashed
+        (async () => {
         try {
-          const { agentHealthStore } = require('./agentHealth');
-          agentHealthStore.setHealth(info.id, 'crashed');
+          const mod = await import('./agentHealth');
+          mod.agentHealthStore.setHealth(info.id, 'crashed');
         } catch (e) {
           // ignore if agentHealthStore is not available
         }
+      })();
       }
     }
     this.agents.clear();
   }
 }
-
 

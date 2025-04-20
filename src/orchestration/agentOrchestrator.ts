@@ -500,7 +500,7 @@ export class AgentOrchestrator {
    */
   getAgent(agentId: string): OrchestratedAgent | undefined {
     // Always fetch agent info from agentManager
-    const agent = agentManager.listAgents().find((a: any) => a.id === agentId);
+    const agent = agentManager.listAgents().find((a) => typeof a === 'object' && a !== null && 'id' in a && (a as { id: string }).id === agentId);
     // If agent.status is 'recovered', force status for returned OrchestratedAgent
     if (agent && agent.status === 'recovered') {
       return agentInfoToOrchestratedAgent(agent, 'recovered');
@@ -527,11 +527,11 @@ export class AgentOrchestrator {
    */
   listAgents(): OrchestratedAgent[] {
     // Always return authoritative agent list from agentManager
-    return agentManager.listAgents().map((agent: any) => {
-      if (agent.status === 'recovered') {
-        return agentInfoToOrchestratedAgent(agent, 'recovered');
+    return agentManager.listAgents().map((agent) => {
+      if (typeof agent === 'object' && agent !== null && 'status' in agent && agent.status === 'recovered') {
+        return agentInfoToOrchestratedAgent(agent as AgentInfo, 'recovered');
       }
-      return agentInfoToOrchestratedAgent(agent);
+      return agentInfoToOrchestratedAgent(agent as AgentInfo);
     });
   }
 
@@ -556,22 +556,15 @@ export class AgentOrchestrator {
     const info = agentManager.agents.get(agentId);
     if (!info) return false;
     info.config = { ...info.config, ...newConfig };
-    if (info.instance && typeof info.instance.setConfig === 'function') {
-      try {
-        await info.instance.setConfig(info.config);
-      } catch (e) {
-        // fallback: ignore if not implemented
-      }
-    }
     // Optionally log config update
     try {
-      const { persistentMemory } = require('./persistentMemory');
-      await persistentMemory.save({
+      const mod = await import('./persistentMemory');
+      await mod.persistentMemory.save({
         type: 'agent_state',
-        content: {
+        content: JSON.stringify({
           id: info.id,
-          name: info.name,
-          type: info.type,
+          name: info.name ?? '',
+          type: info.type ?? '',
           status: info.status,
           config: info.config,
           logs: info.logs,
@@ -579,8 +572,8 @@ export class AgentOrchestrator {
           lastActivity: info.lastActivity,
           crashCount: info.crashCount,
           updatedAt: Date.now(),
-        },
-        tags: ['agent', info.type, info.id, 'config-update'],
+        }),
+        tags: ['agent', info.type ?? '', info.id, 'config-update'],
       });
     } catch (err) {
       // If persistent memory fails, continue

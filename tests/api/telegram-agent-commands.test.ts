@@ -1,4 +1,5 @@
 import { createMocks } from 'node-mocks-http';
+import { EventEmitter } from 'events';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'http://localhost:54321';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'anon-key';
@@ -6,14 +7,25 @@ process.env.TELEGRAM_BOT_TOKEN = 'dummy-bot-token';
 process.env.OPENAI_API_KEY = 'dummy-openai-key';
 process.env.WHISPER_API_KEY = 'dummy-whisper-key';
 
+class TestAgent extends EventEmitter {
+  id: string;
+  status: string = 'running';
+  constructor(id: string) {
+    super();
+    this.id = id;
+  }
+  stop() { this.status = 'stopped'; }
+  start() { this.status = 'running'; }
+}
+
 // Mock orchestratorSingleton before importing handler
 jest.mock('../../src/orchestration/orchestratorSingleton', () => ({
   orchestrator: {
-    getSwarmState: jest.fn(() => ({ agents: [{ id: 's1', status: 'healthy' }] })),
+    getSwarmState: jest.fn(() => ({ agents: [{ id: 's1', status: 'healthy', instance: new TestAgent('s1') }] })),
     stopAgent: jest.fn(() => Promise.resolve()),
     restartAgent: jest.fn(() => Promise.resolve('healthy')),
-    getAgent: jest.fn((id) => (id === 's1' ? { id: 's1', status: 'healthy' } : undefined)),
-    listAgents: jest.fn(() => [{ id: 's1', status: 'healthy' }]),
+    getAgent: jest.fn((id) => (id === 's1' ? { id: 's1', status: 'healthy', instance: new TestAgent('s1') } : undefined)),
+    listAgents: jest.fn(() => [{ id: 's1', status: 'healthy', instance: new TestAgent('s1') }]),
   },
 }));
 

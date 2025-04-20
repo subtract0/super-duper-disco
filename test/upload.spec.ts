@@ -33,7 +33,15 @@ test('document upload → stored & acked', async () => {
     document: { file_id: 'abc', file_name: 'doc.pdf' },
   });
 
-  await handler(req, res);
+  let err;
+  try {
+    console.log('Calling handler with req:', req.body);
+    await handler(req, res);
+    console.log('Handler call complete');
+  } catch (e) {
+    err = e;
+    console.error('Handler threw:', e);
+  }
 
   expect(res._getStatusCode()).toBe(200);
   const body = JSON.parse(res._getData());

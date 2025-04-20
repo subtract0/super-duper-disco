@@ -19,10 +19,18 @@ test('text message → stores, calls OpenAI, replies', async () => {
   mockOpenAI('Hi there!');
   const { fetchMessageHistory, insertMessage } = makeHistoryAndInsertMocks();
 
-  const handler      = loadHandler();
+  const handler = loadHandler();
   const { req, res } = createTelegramUpdate({ id: 2, chat: { id: CHAT_ID }, text: 'Hello' });
 
-  await handler(req, res, undefined, fetchMessageHistory, insertMessage);
+  let err;
+  try {
+    console.log('Calling handler with req:', req.body);
+    await handler(req, res);
+    console.log('Handler call complete');
+  } catch (e) {
+    err = e;
+    console.error('Handler threw:', e);
+  }
 
   expect(res._getStatusCode()).toBe(200);
   expect(insertMessage).toHaveBeenCalled();

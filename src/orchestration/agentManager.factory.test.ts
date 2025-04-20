@@ -48,7 +48,7 @@ describe('AgentManager (modular factory, isolated)', () => {
     const types = ['native', 'langchain', 'autogen'];
     ids.forEach((id, idx) => {
       agentManager.deployAgent(id, id, types[idx], {});
-      const agent = agentManager.listAgents().find((a: any) => a.id === id);
+      const agent = agentManager.listAgents().find((a) => typeof a === 'object' && a !== null && 'id' in a && (a as { id: string }).id === id);
       expect(agent).toBeDefined();
       expect(agent!.type).toBe(types[idx]);
       expect(agent!.status).toBe('running');

@@ -57,7 +57,8 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
   - **2025-04-20:** [Done] Natural-language intent parsing for agent management is now integrated into `/api/telegram.ts`. Supports stop, restart, launch, delete, and config update, with fallback clarification prompts for ambiguous inputs.
   - **2025-04-20:** [Done] Conversational agent management with multi-turn dialogue state is now live in Telegram. Includes natural-language intent parsing, per-user dialogue state, config updates, error handling, and robust conversational flow for agent management.
   - **2025-04-20:** [Done] Tests expanded to cover conversational and multi-turn flows: natural-language, ambiguous, and config update interactions are now verified.
-  - **2025-04-20:** [In Progress] Reviewing Telegram agent management test reliability and edge case coverage. Next: Identify and address any flaky, slow, or missing edge case tests for Telegram conversational flows.
+  - **2025-04-20:** [Done] Added tests for malformed config JSON, rapid repeated commands, and unknown agent ID edge cases for Telegram agent management flows.
+  - **2025-04-20:** [In Progress] Run all tests and verify reliability of Telegram agent management flows.
 
 
 - [x] **Objective: Upgrade `/api/telegram` endpoint and bot logic for conversational agent orchestration**

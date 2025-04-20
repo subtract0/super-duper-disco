@@ -151,4 +151,73 @@ describe('Telegram bot agent commands', () => {
     expect(payload.chat_id).toBe(18);
     expect(payload.text).toMatch(/failed to update config/i);
   });
+
+  it('notifies user if config JSON is malformed', async () => {
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // Prompt for config
+    let { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 19 }, from: { id: 29 }, message_id: 46, text: 'update config for agent badjson' } },
+    });
+    await handler(req, res);
+    // User sends malformed JSON
+    req = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 19 }, from: { id: 29 }, message_id: 47, text: '{ foo: bar' } },
+    }).req;
+    res = createMocks({ method: 'POST' }).res;
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.reverse().find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(19);
+    expect(payload.text).toMatch(/invalid json|parse error|could not parse/i);
+  });
+
+  it('notifies user if agent id does not exist for stop command', async () => {
+    jest.spyOn(orchestrator, 'stopAgent').mockImplementation(async (id: string) => {
+      throw new Error('Agent not found');
+    });
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    const { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 20 }, from: { id: 30 }, message_id: 48, text: '/stop nonexist' } },
+    });
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    const sendCall = calls.reverse().find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(20);
+    expect(payload.text).toMatch(/not found|no agent/i);
+  });
+
+  it('handles rapid repeated stop commands gracefully', async () => {
+    await orchestrator.launchAgent({ id: 'repeat1', type: 'native', status: 'pending', host: 'test', config: {} });
+    (axios.post as jest.Mock).mockResolvedValue({ data: {} });
+    // First stop
+    let { req, res } = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 21 }, from: { id: 31 }, message_id: 49, text: '/stop repeat1' } },
+    });
+    await handler(req, res);
+    // Immediately try to stop again
+    req = createMocks({
+      method: 'POST',
+      body: { message: { chat: { id: 21 }, from: { id: 31 }, message_id: 50, text: '/stop repeat1' } },
+    }).req;
+    res = createMocks({ method: 'POST' }).res;
+    await handler(req, res);
+    expect(res._getStatusCode()).toBe(200);
+    const calls = (axios.post as jest.Mock).mock.calls;
+    // Should notify user that agent is already stopped or not found
+    const sendCall = calls.reverse().find(c => c[0].includes('/sendMessage'));
+    expect(sendCall).toBeDefined();
+    const [, payload] = sendCall!;
+    expect(payload.chat_id).toBe(21);
+    expect(payload.text).toMatch(/already stopped|not found|no agent/i);
+  });
 });

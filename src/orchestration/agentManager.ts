@@ -2,14 +2,16 @@
 
 export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered';
 
+import type { AgentLike } from './agents/BaseAgent';
+
 export interface AgentInfo {
   id: string;
   name: string;
   status: AgentStatus;
   logs: string[];
-  instance: any; // Can be BaseAgent, LangChainAgent, or AutoGenAgent
+  instance: AgentLike;
   type?: string;
-  config?: any;
+  config?: Record<string, unknown>;
   lastHeartbeat?: number; // timestamp in ms
   lastActivity?: number; // timestamp in ms
   crashCount?: number;
@@ -20,7 +22,7 @@ export interface AgentInfo {
 }
 
 // Use BaseAgent from agents/BaseAgent
-import { BaseAgent } from './agents/BaseAgent';
+// (imported as type above)
 
 /**
  * Factory function for modular agent instantiation.
@@ -35,7 +37,7 @@ export class AgentManager {
    * Deploys and starts a new agent of the given type.
    * Uses createAgent factory for modularity.
    */
-  async deployAgent(id: string, name: string, type: string = 'native', config: any = {}) {
+  async deployAgent(id: string, name: string, type: string = 'native', config: Record<string, unknown> = {}) {
     // If an agent with this ID exists, stop and remove it first (for restart/recovery)
     if (this.agents.has(id)) {
       const existing = this.agents.get(id);
@@ -60,7 +62,8 @@ export class AgentManager {
     };
     agent.on('heartbeat', heartbeatListener);
     // Store listener for later removal
-    (agent as any)._heartbeatListener = heartbeatListener;
+    // @ts-expect-error: _heartbeatListener is used for test cleanup
+    (agent as BaseAgent)._heartbeatListener = heartbeatListener;
     // Set health to healthy
     try {
       const { agentHealthStore } = require('./agentHealth');
@@ -120,11 +123,8 @@ export class AgentManager {
     if (info && info.instance) {
       if (typeof info.instance.setLogs === 'function') {
         info.instance.setLogs(logs);
-      } else if ('_logs' in info.instance) {
-        info.instance._logs = logs;
-      } else if ('logs' in info.instance) {
-        info.instance.logs = logs;
       }
+      // Only update the info.logs field, not instance internals
       info.logs = logs;
       // Ensure logs are synced after setting
       if (typeof this.syncAgentLogs === 'function') {

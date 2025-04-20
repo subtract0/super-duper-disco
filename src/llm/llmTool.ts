@@ -23,10 +23,11 @@ class OpenAILLM implements LLM {
   constructor() {
     this.model = new ChatOpenAI({
       openAIApiKey: process.env.OPENAI_API_KEY,
-      modelName: process.env.OPENAI_MODEL || 'gpt-4',
+      modelName: 'gpt-4-1106-preview', // Explicitly set to GPT-4.1
       temperature: 0.2,
       maxTokens: 1024,
     });
+    console.log('[OpenAILLM][BOOT] Model set to: gpt-4-1106-preview');
   }
   async chat(messages: LLMMessage[]): Promise<string> {
     // Log the model name for debugging purposes

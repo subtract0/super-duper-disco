@@ -71,7 +71,12 @@ export class AgentMessageMemory {
     }
     console.log('[AgentMessageMemory.save] Attempting to insert MCP envelope:', JSON.stringify(mcpEnvelope.body, null, 2));
     console.log('[AgentMessageMemory.save] Using server-side client for insert');
-    const { data, error } = await supabaseServer.from(this.table).insert([{ ...mcpEnvelope.body }]);
+    const { data, error } = await supabaseServer.from(this.table).insert([{
+  ...mcpEnvelope.body,
+  thread_id: record.thread_id,
+  user_id: record.user_id,
+  agent_id: record.agent_id
+}]);
     console.log('[AgentMessageMemory.save] Supabase insert (server client) result:', { data, error });
     if (error) {
       console.error('[AgentMessageMemory.save] Supabase insert error:', error, '\nMessage:', mcpEnvelope.body);
@@ -86,6 +91,10 @@ export class AgentMessageMemory {
    * Fetch the last N messages for a thread/user as Model Context objects.
    */
   async fetchRecent({ thread_id, user_id, limit = 10 }: { thread_id?: string; user_id?: string; limit?: number }): Promise<ModelContextObject[]> {
+    // Force thread_id to string if present
+    if (thread_id && typeof thread_id !== 'string') thread_id = String(thread_id);
+    if (user_id && typeof user_id !== 'string') user_id = String(user_id);
+    console.log('[AgentMessageMemory.fetchRecent] Fetching recent messages with params:', { thread_id, user_id, limit });
     let q = supabaseServer.from(this.table).select('*');
     if (thread_id) q = q.eq('thread_id', thread_id);
     if (user_id) q = q.eq('user_id', user_id);
@@ -93,18 +102,37 @@ export class AgentMessageMemory {
     const response = await q;
     const data = response && typeof response === 'object' ? response.data : undefined;
     const error = response && typeof response === 'object' ? response.error : undefined;
+    console.log('[AgentMessageMemory.fetchRecent] Supabase response:', { data, error });
     if (error) {
       console.error('[AgentMessageMemory.fetchRecent] Supabase fetch error:', error, '\nParams:', { thread_id, user_id, limit });
       throw new Error(`[AgentMessageMemory.fetchRecent] Supabase error: ${typeof error === 'object' && error.message ? error.message : JSON.stringify(error)} (Params: ${JSON.stringify({ thread_id, user_id, limit })})`);
     }
-    if (!Array.isArray(data)) {
+    if (!Array.isArray(data) || data.length === 0) {
       console.warn('[AgentMessageMemory.fetchRecent] Supabase fetch returned no data or malformed data.', { thread_id, user_id, limit, data });
+      // Fallback: fetch all rows for this thread_id for debugging
+      if (thread_id) {
+        const allRows = await supabaseServer.from(this.table).select('*').eq('thread_id', thread_id);
+        console.warn('[AgentMessageMemory.fetchRecent] Fallback: All rows for thread_id', thread_id, allRows.data);
+      }
       return [];
     }
-    return (data || [])
-      .map((row: any) => parseMCPEnvelope({ ...row, protocol: 'MCP', body: row }))
-      .filter((env: MCPEnvelope | null): env is MCPEnvelope => !!env && validateModelContext(env.body))
+    // TEMP: Bypass parseMCPEnvelope, just return row as body for memory to work
+const parsed = (data || []).map((row: any, idx: number) => {
+        console.log(`[AgentMessageMemory.fetchRecent] [DEBUG] Row ${idx} before parse:`, row);
+        if (row.value && typeof row.value === 'string') {
+          try { row.value = JSON.parse(row.value); } catch (e) {
+            console.warn('[AgentMessageMemory.fetchRecent] Failed to parse value as JSON:', row.value, e);
+          }
+        }
+        // Bypass MCP parsing for now
+        const env = { body: row };
+        console.log(`[AgentMessageMemory.fetchRecent] [DEBUG] Row ${idx} after MCP bypass:`, env);
+        return env;
+      })
+      .filter((env: any) => !!env.body && typeof env.body.value?.role === 'string')
       .map((env) => env.body);
+console.log('[AgentMessageMemory.fetchRecent] [DEBUG] Returning parsed array:', parsed);
+return parsed;
   }
 }
 

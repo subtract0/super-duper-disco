@@ -174,14 +174,32 @@ export default async function handler(
     // 4. Fetch conversation history ------------------------------------
     //--------------------------------------------------------------------
     const history = await agentMessageMemory.fetchRecent({
-      user_id,
       thread_id: String(chat_id),
       limit: 10,
     });
 
+    // Log the raw history for debugging
+    console.log('[Telegram Handler] Raw history before filtering:', history);
+    (history ?? []).forEach((m, i) => {
+      console.log(`[Telegram Handler][DEBUG] Message ${i}:`, m.value);
+    });
+
+    // Loosen the filter for debugging: only require role to be a string
     let safeHistory = (history ?? [])
-      .filter((m: any) => m?.value?.role && m?.value?.content)
-      .map((m: any) => ({ role: m.value.role, content: m.value.content }));
+      .filter((m: any) => m?.value && typeof m.value.role === 'string')
+      .map((m: any) => ({
+        role: m.value.role === 'user' ? 'human' : m.value.role === 'agent' ? 'ai' : m.value.role,
+        content: m.value.content
+      }));
+
+    // Reverse to chronological order (oldest first)
+    safeHistory = safeHistory.reverse();
+
+    // Optionally, prepend a system prompt for better context retention
+    safeHistory.unshift({ role: 'system', content: 'You are a helpful assistant. Always use the conversation history above to answer as contextually as possible.' });
+
+    // Log the safeHistory after filtering and ordering
+    console.log('[Telegram Handler] safeHistory after filtering:', safeHistory);
 
     if (!Array.isArray(safeHistory) || safeHistory.length === 0) {
       // Defensive: always send at least the current user message

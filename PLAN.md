@@ -48,6 +48,15 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
 
 ---
 
+## Milestone (2025-04-20): Telegram Agent Management Test Suite Orchestrator Mock Realigned
+
+- **Context:** Orchestrator mock in `telegram.commands.test.ts` now maintains a mutable in-memory agent list, matching agent lifecycle flows in tests.
+- **Result:** /status and agent management commands now reflect test-launched agents, resolving previous mock/test mismatch. Realistic agent state transitions are now covered.
+- **Next Step:** Investigate and patch conversational flow tests (config update, malformed JSON, natural language stop) to ensure handler and test inputs are aligned. Focus on surfacing actionable error messages and correct conversational prompts.
+- **Action:** Proceed to review and patch conversational flow tests, update PLAN.md and TESTING.md after each fix.
+
+---
+
 ## Milestone (2025-04-20): Telegram Agent Management Test Suite Unblocked, Failing Tests Remain
 
 - **Context:** Patched `telegram.commands.test.ts` to mock `orchestratorSingleton` before handler import, following the working pattern from `telegram-agent-commands.test.ts`.

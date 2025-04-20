@@ -37,7 +37,7 @@ export async function callOpenAIGPT(messages: Message[]): Promise<string> {
       throw new Error('OpenAI down');
     }
     return response.data.choices[0].message.content.trim();
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Always throw an error with a .message property that is a string
     console.error('[OpenAI callOpenAIGPT] Caught error:', err);
     // Uniform error for any OpenAI failure

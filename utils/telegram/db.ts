@@ -4,7 +4,7 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export async function insertMessage(message: any, supabaseClient?: any) {
+export async function insertMessage(message: Record<string, unknown>, supabaseClient?: ReturnType<typeof createClient>) {
   if (!supabaseClient) throw new Error('supabaseClient is undefined in insertMessage');
   // Validate required fields and set sensible defaults
   const validMessage = {
@@ -24,13 +24,14 @@ export async function insertMessage(message: any, supabaseClient?: any) {
       console.error('[insertMessage] Supabase insert error:', error, '\nMessage:', validMessage);
     }
     return { data, error };
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('[insertMessage] Exception during insert:', err, '\nMessage:', validMessage);
-    return { data: null, error: err };
+    const error = err instanceof Error ? err : new Error('Unknown error');
+    return { data: null, error };
   }
 }
 
-export async function fetchMessageHistory(user_id: string, supabaseClient?: any) {
+export async function fetchMessageHistory(user_id: string, supabaseClient: SupabaseClient = supabase) {
   if (!supabaseClient) throw new Error('supabaseClient is undefined in fetchMessageHistory');
   return await supabaseClient
     .from('messages')

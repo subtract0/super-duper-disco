@@ -59,8 +59,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     await tg.send({ chat_id: chatId, text: 'Unsupported message type.' });
     res.status(200).json({ ok: true });
-  } catch (err: any) {
-    await tg.send({ chat_id: chatId, text: `Error: ${err.message}` });
-    res.status(500).json({ ok: false, error: err.message });
+  } catch (err: unknown) {
+    const error = err instanceof Error ? err : new Error('Unknown error');
+    await tg.send({ chat_id: chatId, text: `Error: ${error.message}` });
+    res.status(500).json({ ok: false, error: error.message });
   }
 }

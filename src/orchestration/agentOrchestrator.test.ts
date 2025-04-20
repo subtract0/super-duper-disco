@@ -79,6 +79,8 @@ describe('AgentOrchestrator', () => {
   });
 
   test('should auto-recover a crashed agent and reflect live state', async () => {
+    // DEBUG: Log agent list before launch
+    console.log('Before launch:', orchestrator.listAgents());
     const agentConfig: OrchestratedAgent = {
       id: 'orch-agent-crash-1',
       type: 'test-type',
@@ -93,6 +95,8 @@ describe('AgentOrchestrator', () => {
     expect(orchestrator.getHealth(agentConfig.id)).toBe('crashed');
     // Now trigger orchestrator auto-recovery
     const recoveryResult = await orchestrator.restartAgent(agentConfig.id);
+    // DEBUG: Log agent list after restart
+    console.log('After restart:', orchestrator.listAgents());
     expect(recoveryResult).toBe('recovered');
     // Health should now be 'recovered'
     expect(orchestrator.getHealth(agentConfig.id)).toBe('recovered');

@@ -352,19 +352,41 @@ export class AgentOrchestrator {
       console.log(`[ORCH] restartAgent: recovery failed for ${agentId}`);
       return 'recovery_failed';
     }
-    // Simulate successful recovery
-    agentHealthStore.setHealth(agentId, 'recovered');
-    console.log(`[ORCH][DEBUG] Health set to recovered for ${agentId}`);
-    const okMsg = `Agent recovered successfully`;
-    agentLogStore.addLog({
-      agentId,
-      timestamp: Date.now(),
-      level: 'info',
-      message: okMsg,
-    });
-    logAgentHealthToSupabase(agentId, 'recovered', okMsg, 'info', { event: 'restartAgent' });
-    console.log(`[ORCH] restartAgent: recovery succeeded for ${agentId}`);
-    return 'recovered';
+    // Actually restart the agent process using its last config
+    try {
+      // Use the last known config to re-launch the agent
+      await this.launchAgent({
+        id: agent.id,
+        type: agent.type,
+        status: 'pending',
+        host: agent.host,
+        config: agent.config || {},
+      });
+      agentHealthStore.setHealth(agentId, 'recovered');
+      console.log(`[ORCH][DEBUG] Health set to recovered for ${agentId}`);
+      const okMsg = `Agent recovered successfully`;
+      agentLogStore.addLog({
+        agentId,
+        timestamp: Date.now(),
+        level: 'info',
+        message: okMsg,
+      });
+      logAgentHealthToSupabase(agentId, 'recovered', okMsg, 'info', { event: 'restartAgent' });
+      console.log(`[ORCH] restartAgent: recovery succeeded for ${agentId}`);
+      return 'recovered';
+    } catch (err) {
+      agentHealthStore.setHealth(agentId, 'recovery_failed');
+      const failMsg = `Recovery failed: ${err?.message || err}`;
+      agentLogStore.addLog({
+        agentId,
+        timestamp: Date.now(),
+        level: 'error',
+        message: failMsg,
+      });
+      logAgentHealthToSupabase(agentId, 'recovery_failed', failMsg, 'error', { event: 'restartAgent', error: err });
+      console.error(`[ORCH] restartAgent: recovery failed for ${agentId}:`, err);
+      return 'recovery_failed';
+    }
   }
 
   /**

@@ -89,6 +89,14 @@ class AgentManager {
    * Uses createAgent factory for modularity.
    */
   async deployAgent(id: string, name: string, type: string = 'native', config: any = {}) {
+    // If an agent with this ID exists, stop and remove it first (for restart/recovery)
+    if (this.agents.has(id)) {
+      const existing = this.agents.get(id);
+      if (existing && existing.instance && typeof existing.instance.stop === 'function') {
+        existing.instance.stop();
+      }
+      this.agents.delete(id);
+    }
     // Try to load persistent memory for this agent (by id and type)
     let hydratedConfig = { ...config };
     try {

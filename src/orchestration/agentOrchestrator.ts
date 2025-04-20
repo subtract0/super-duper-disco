@@ -14,27 +14,35 @@ export type OrchestratedAgent = {
   type: string;
   status: 'pending' | 'healthy' | 'crashed' | 'restarting' | 'recovered' | 'recovery_failed';
   host: string;
-  config: Record<string, any>;
+  config: AgentInfo['config'];
   lastHeartbeat?: number | null;
   lastActivity?: number | null;
   health?: string;
 };
 
 // Helper to map AgentInfo to OrchestratedAgent
-function agentInfoToOrchestratedAgent(agent: any, forcedStatus?: string): OrchestratedAgent {
+function agentInfoToOrchestratedAgent(agent: AgentInfo, forcedStatus?: string): OrchestratedAgent {
   return {
-    id: agent.id,
-    type: agent.type || 'native',
-    status: forcedStatus !== undefined ? forcedStatus : (
-      agent.status === 'running' ? 'healthy'
-      : agent.status === 'stopped' || agent.status === 'error' ? 'crashed'
-      : agent.status
-    ),
-    host: agent.config?.host || 'local',
-    config: agent.config || {},
-    lastHeartbeat: agent.lastHeartbeat ?? null,
-    lastActivity: agent.lastActivity ?? null,
-    health: agent.status === 'running' ? 'healthy' : agent.status,
+    id: typeof agent.id === 'string' ? agent.id : '',
+    type: typeof agent.type === 'string' ? agent.type : 'native',
+    status: forcedStatus !== undefined && typeof forcedStatus === 'string'
+      ? forcedStatus as OrchestratedAgent['status']
+      : (agent.status === 'running' ? 'healthy'
+        : agent.status === 'stopped' || agent.status === 'error' ? 'crashed'
+        : (['pending', 'healthy', 'crashed', 'restarting', 'recovered', 'recovery_failed'].includes(agent.status as string)
+          ? agent.status as OrchestratedAgent['status']
+          : 'pending')
+      ),
+    host:
+      agent.config && typeof agent.config === 'object' && agent.config !== null && 'host' in agent.config && typeof (agent.config as any).host === 'string'
+        ? (agent.config as any).host
+        : 'local',
+    config: agent.config ?? {},
+    lastHeartbeat: typeof agent.lastHeartbeat === 'number' ? agent.lastHeartbeat : null,
+    lastActivity: typeof agent.lastActivity === 'number' ? agent.lastActivity : null,
+    health: typeof agent.status === 'string'
+      ? (agent.status === 'running' ? 'healthy' : agent.status)
+      : undefined,
   };
 }
 
@@ -57,6 +65,7 @@ export type SwarmState = {
 import { agentLogStore } from './agentLogs';
 import { agentHealthStore, AgentHealthStatus } from './agentHealth';
 import { agentManager } from './agentManagerSingleton';
+import type { AgentInfo } from './agentManager';
 import { logAgentHealthToSupabase } from './supabaseAgentOps';
 import { sendSlackNotification } from '../utils/notify';
 
@@ -89,7 +98,7 @@ if (typeof process !== 'undefined' && process.env && process.env.SLACK_WEBHOOK_U
 }
 
 export class AgentOrchestrator {
-  private agentMessageMemory: { save: (msg: any) => Promise<void> };
+  private agentMessageMemory: { save: (msg: Record<string, unknown>) => Promise<void> };
 
   /**
    * Registry of agent capabilities for dynamic routing
@@ -139,7 +148,7 @@ export class AgentOrchestrator {
   /**
    * Delegate a task to an agent with a given capability (multi-agent workflow)
    */
-  async delegateTask(capability: AgentCapability, task: any, from: string) {
+  async delegateTask(capability: AgentCapability, task: Record<string, unknown>, from: string) {
     const candidates = this.findAgentsByCapability(capability);
     if (candidates.length === 0) throw new Error(`No agent with capability: ${capability}`);
     const to = candidates[Math.floor(Math.random() * candidates.length)];
@@ -220,7 +229,7 @@ export class AgentOrchestrator {
   /**
    * Helper to extract message body/content for legacy consumers
    */
-  extractMessageContent(envelope: A2AEnvelope): any {
+  extractMessageContent(envelope: A2AEnvelope): unknown {
     return envelope.body;
   }
 
@@ -229,7 +238,7 @@ export class AgentOrchestrator {
    */
   getSwarmState(): SwarmState {
     // Enrich agents with health/activity
-    const agentsWithHealth = agentManager.listAgents().map((agent: any) => {
+    const agentsWithHealth = agentManager.listAgents().map((agent: AgentInfo) => {
       const orch = agentInfoToOrchestratedAgent(agent);
       return {
         ...orch,
@@ -244,7 +253,7 @@ export class AgentOrchestrator {
     };
   }
 
-  constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: any) => Promise<void> }) {
+  constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: Record<string, unknown>) => Promise<void> }) {
     if (agentMessageMemory) {
       this.agentMessageMemory = agentMessageMemory;
     } else {
@@ -351,6 +360,9 @@ export class AgentOrchestrator {
       }
       // Return the authoritative agent info from agentManager
       const agent = agentManager.agents.get(agentConfig.id);
+      if (!agent) {
+        throw new Error(`Agent with id ${agentConfig.id} not found after launch.`);
+      }
       return agentInfoToOrchestratedAgent(agent);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);

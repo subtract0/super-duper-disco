@@ -43,7 +43,64 @@ import { QCAgent } from './agents/qcAgent';
 import { BuilderAgent } from './agents/builderAgent';
 import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
+type AgentCapability = string;
+
 export class AgentOrchestrator {
+  /**
+   * Registry of agent capabilities for dynamic routing
+   * { agentId: ["planner", "researcher", ...] }
+   */
+  private capabilityRegistry: Record<string, AgentCapability[]> = {};
+
+  /**
+   * Dynamic scaling: auto-spawn/stop agents based on workload
+   * Call this periodically or on-demand
+   */
+  async autoscaleAgents(workload: number) {
+    const agents = this.listAgents();
+    const running = agents.filter(a => a.status === 'running');
+    const target = Math.max(1, Math.ceil(workload / 5)); // Example: 1 agent per 5 tasks
+    if (running.length < target) {
+      // Spawn new agents
+      for (let i = running.length; i < target; i++) {
+        const id = `auto-${Date.now()}-${i}`;
+        await this.launchAgent({ id, type: 'autogen', status: 'pending', host: 'local', config: {} });
+      }
+    } else if (running.length > target) {
+      // Stop excess agents
+      const toStop = running.slice(target);
+      for (const agent of toStop) {
+        await this.stopAgent(agent.id);
+      }
+    }
+  }
+
+  /**
+   * Register agent capabilities for routing
+   */
+  registerCapabilities(agentId: string, capabilities: AgentCapability[]) {
+    this.capabilityRegistry[agentId] = capabilities;
+  }
+
+  /**
+   * Find agents with a required capability
+   */
+  findAgentsByCapability(capability: AgentCapability): string[] {
+    return Object.entries(this.capabilityRegistry)
+      .filter(([_, caps]) => caps.includes(capability))
+      .map(([id]) => id);
+  }
+
+  /**
+   * Delegate a task to an agent with a given capability (multi-agent workflow)
+   */
+  async delegateTask(capability: AgentCapability, task: any, from: string) {
+    const candidates = this.findAgentsByCapability(capability);
+    if (candidates.length === 0) throw new Error(`No agent with capability: ${capability}`);
+    const to = candidates[Math.floor(Math.random() * candidates.length)];
+    await this.sendAgentMessage({ from, to, content: task, timestamp: Date.now() });
+    return to;
+  }
   // All agent state is managed solely via agentManager; do not duplicate agent state here.
   private recoveryAttempts: Record<string, number> = {};
   private maxRecoveryAttempts = 3;

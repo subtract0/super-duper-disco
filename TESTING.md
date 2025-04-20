@@ -62,6 +62,36 @@ This document consolidates best practices, patterns, and insights gathered while
 
 ## Telegram Bot Testing Log
 
+## Test File Inventory (2025-04-20)
+
+**test/** (modular, current Telegram suite):
+- `test/agent.spec.ts` — Agent control commands (start, stop, status, restart)
+- `test/chat.spec.ts` — Chat message handling and OpenAI/Telegram integration
+- `test/upload.spec.ts` — Document upload and file handling
+- `test/errors.spec.ts` — Error handling for Supabase/OpenAI failures, user feedback
+- `test/helpers.ts` — Shared mocks, environment setup, and test utilities
+
+**tests/api/** (legacy/other API):
+- `tests/api/agents_id_health.test.ts` — Agent health API endpoint
+- `tests/api/orchestrator-state.test.ts` — Orchestrator state API endpoint
+- `tests/api/telegram-agent-commands.test.ts` — Telegram agent command API (legacy)
+
+**tests/orchestration/**:
+- `tests/orchestration/agentManager.modular.test.ts` — AgentManager in-memory orchestration
+
+**tests/protocols/**:
+- `tests/protocols/a2aAdapter.test.ts` — A2A protocol adapter
+- `tests/protocols/modelContextAdapter.test.ts` — Model context protocol adapter
+
+**components/**:
+- `components/AgentRegistry.test.tsx` — Agent Registry UI
+- `components/AuthForm.test.tsx` — Authentication form
+- `components/SentryErrorBoundary.test.tsx` — Sentry error boundary
+
+**utils/**:
+- `utils/supabaseClient.test.ts` — Supabase client utility
+
+
 ### Milestone (2025-04-20): Orchestrator Agent Status Alignment
 - The orchestrator mock now sets agent status to 'running' for all lifecycle events, matching the Telegram handler's expectations for /status and agent management commands.
 - Status, restart, and config update tests now reflect correct status strings and pass as expected.

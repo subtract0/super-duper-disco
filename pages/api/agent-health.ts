@@ -3,6 +3,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 import { agentHistoryStore } from '../../src/orchestration/agentHistory';
 import { agentHealthStore } from '../../src/orchestration/agentHealth';
+import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 
 export default function handler(req: NextApiRequest, res: NextApiResponse) {
   // Return health for all agents, including uptime, crashCount, lastHeartbeat

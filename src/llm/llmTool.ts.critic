@@ -1,0 +1,117 @@
+```
+src/
+└─ llm/
+   ├─ types.ts
+   ├─ providers/
+   │  ├─ openai.ts
+   │  └─ index.ts
+   └─ factory.ts
+```
+
+---
+
+### **src/llm/types.ts**
+```ts
+export interface LLMMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+export interface LLM {
+  chat(messages: LLMMessage[]): Promise<string>;
+}
+```
+
+---
+
+### **src/llm/providers/openai.ts**
+```ts
+/* OpenAI provider – uses @langchain/openai */
+
+import { ChatOpenAI } from '@langchain/openai';
+import { LLM, LLMMessage } from '../types';
+
+/* Patch only in non‑prod environments; avoids global side‑effects in prod */
+if (process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('openai/shims/node');
+}
+
+export class OpenAILLM implements LLM {
+  private model: ChatOpenAI;
+
+  constructor(
+    private readonly apiKey  = process.env.OPENAI_API_KEY ?? '',
+    private readonly modelId = process.env.OPENAI_MODEL ?? 'gpt-4-1106-preview',
+    private readonly temperature = 0.2,
+    private readonly maxTokens   = 1024,
+  ) {
+    if (!apiKey) throw new Error('OPENAI_API_KEY not set');
+    this.model = new ChatOpenAI({
+      openAIApiKey: apiKey,
+      modelName   : modelId,
+      temperature ,
+      maxTokens   ,
+    });
+  }
+
+  async chat(messages: LLMMessage[]): Promise<string> {
+    const formatted = messages.map(m => ({ role: m.role, content: m.content }));
+    const res       = await this.model.invoke(formatted);
+    return typeof res.content === 'string' ? res.content : '';
+  }
+}
+```
+
+---
+
+### **src/llm/providers/index.ts**
+```ts
+export { OpenAILLM } from './openai';
+// export { AzureLLM }   from './azure';   // add more providers here
+// export { AnthropicLLM } from './anthropic';
+```
+
+---
+
+### **src/llm/factory.ts**
+```ts
+import { LLM } from './types';
+import { OpenAILLM } from './providers';
+
+/**
+ * Very light singleton‑cache: each provider is instantiated once per process.
+ * Replace or extend if you need per‑request customisation.
+ */
+const cache: Record<string, LLM> = {};
+
+export function getLLM(provider: string = 'openai'): LLM {
+  if (cache[provider]) return cache[provider];
+
+  let instance: LLM;
+  switch (provider) {
+    case 'openai':
+    default:
+      instance = new OpenAILLM();
+      break;
+    /* case 'azure':
+       instance = new AzureLLM();
+       break; */
+  }
+
+  cache[provider] = instance;
+  return instance;
+}
+```
+
+---
+
+### Was sich geändert hat 🔧
+
+* **Zero top‑level `console.log`** → keine Token‑Leaks, saubere Tests.  
+* **Keine Side‑Effect‑Instanzen** – Provider wird erst in `getLLM()` erstellt und zwischengespeichert.  
+* **Klares Type‑System** (`LLM`, `LLMMessage`) in `types.ts`.  
+* **Providers‑Ordner** → leicht neue LLM‑Backends hinzufügen, ohne den Factory‑Code anzufassen.  
+* **Patch‑Fetch** nur in dev/test‑Runs.  
+
+Du kannst jetzt überall `import { getLLM } from '@/llm/factory';` verwenden und hast dennoch volle Austauschbarkeit der Provider.

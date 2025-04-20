@@ -1,7 +1,7 @@
 import handler from './[id]logs';
 import { createMocks } from 'node-mocks-http';
 import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../../src/orchestration/agentManager';
+import { agentManager } from '../../../src/orchestration/agentManagerSingleton';
 
 describe('/api/agents/agentLogs API', () => {
   const agentConfig = {

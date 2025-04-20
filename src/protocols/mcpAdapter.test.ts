@@ -125,6 +125,7 @@ describe('Model Context Protocol (MCP) Envelope Compliance', () => {
     }
   });
 
+  it('should support optional fields', () => {
     const env = buildMCPEnvelope({
       type: 'broadcast',
       from: 'a',

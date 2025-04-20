@@ -103,7 +103,14 @@ export default function AgentBrokerPanel() {
               });
               if (!res.ok) {
                 const errMsg = await res.text();
-                setPromptError("Failed to create agent from prompt: " + errMsg);
+                let msg = errMsg;
+                try {
+                  const parsed = JSON.parse(errMsg);
+                  if (parsed && parsed.error) {
+                    msg = parsed.error;
+                  }
+                } catch {}
+                setPromptError(msg);
               } else {
                 setPrompt("");
                 fetchIdeas();

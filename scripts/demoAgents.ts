@@ -1,4 +1,6 @@
-import { agentManager } from "../src/orchestration/agentManager";
+import { AgentManager } from "../src/orchestration/agentManager";
+
+const agentManager = new AgentManager();
 
 /**
  * This script demonstrates how to deploy and interact with both LangChain and AutoGen agents

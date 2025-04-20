@@ -1,7 +1,7 @@
 import handler from './orchestrator-state';
 import { createMocks } from 'node-mocks-http';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../src/orchestration/agentManager';
+import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 
 describe('/api/orchestrator-state API', () => {
   beforeEach(() => {
@@ -34,8 +34,10 @@ describe('/api/orchestrator-state API', () => {
     expect(Object.keys(data.health)).toEqual(
       expect.arrayContaining(['orch-state-1', 'orch-state-2'])
     );
-    expect(data.health['orch-state-1'].status).toBe('running');
-    expect(data.health['orch-state-2'].status).toBe('stopped');
+    expect(data.health['orch-state-1'].rawStatus).toBe('running');
+    expect(data.health['orch-state-2'].rawStatus).toBe('stopped');
+    expect(data.health['orch-state-1'].status).toBe('healthy');
+    expect(data.health['orch-state-2'].status).toBe('crashed');
     expect(Array.isArray(data.logs)).toBe(true);
   });
 

@@ -8,9 +8,10 @@ export class QCAgent {
   lastReview: string | null = null;
   lastResult: string | null = null;
 
-  constructor(id: string, openAIApiKey: string) {
+  // Allow injection of a mock LangChainAgent for testing
+  constructor(id: string, openAIApiKey: string, langchainAgentOverride?: LangChainAgent) {
     this.id = id;
-    this.langchain = new LangChainAgent(id, openAIApiKey);
+    this.langchain = langchainAgentOverride || new LangChainAgent(id, openAIApiKey);
   }
 
   /**

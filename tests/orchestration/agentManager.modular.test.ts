@@ -1,4 +1,4 @@
-import { agentManager } from '../../src/orchestration/agentManager';
+import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 import { LangChainAgent } from '../../src/orchestration/langchainAgent';
 import { AutoGenAgent } from '../../src/orchestration/autoGenAgent';
 

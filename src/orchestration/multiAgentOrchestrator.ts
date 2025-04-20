@@ -1,4 +1,4 @@
-import { agentManager } from "./agentManager";
+import { agentManager } from './agentManagerSingleton';
 import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
 
 /**

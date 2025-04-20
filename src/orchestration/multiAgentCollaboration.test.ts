@@ -1,3 +1,5 @@
+// NOTE: All agent mocks used with AgentManager.deployAgent MUST implement EventEmitter (e.g., use BaseAgent or a compatible class).
+// This prevents TypeError: agent.on is not a function during tests. See PLAN.md for regression-proofing details.
 /**
  * Multi-Agent Collaboration Protocol Tests
  *
@@ -13,16 +15,17 @@
  *   Agent B can process message and optionally reply
  */
 import { AgentOrchestrator } from './agentOrchestrator';
-import { agentManager } from './agentManager';
+import { agentManager } from './agentManagerSingleton';
 import { parseA2AEnvelope } from '../protocols/a2aAdapter';
 
+// Helper: create a fresh AgentManager and Orchestrator for each test
+
 describe('Multi-Agent Collaboration (A2A Protocol)', () => {
+  
   let orchestrator: AgentOrchestrator;
   beforeEach(async () => {
-    orchestrator = new AgentOrchestrator();
-    // Clean up all agents
-    agentManager.listAgents().forEach(agent => agentManager.stopAgent(agent.id));
-    if (orchestrator.messageBus) orchestrator.messageBus.length = 0;
+    // agentManager = new AgentManager(); // Use the singleton from agentManagerSingleton instead.
+    orchestrator = new AgentOrchestrator(agentManager, { publish: jest.fn(), list: () => [], byReceiver: () => [] } as any);
     // Always mock agentMessageMemory to avoid real persistence
     (orchestrator as any).agentMessageMemory = { save: jest.fn().mockResolvedValue(undefined) };
   });

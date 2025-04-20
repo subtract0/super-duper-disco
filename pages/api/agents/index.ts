@@ -3,14 +3,13 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { getAgents, saveAgents } from '../../../__mocks__/persistentStore';
 import { v4 as uuidv4 } from 'uuid';
 import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
+import { agentManager } from '../../../src/orchestration/agentManagerSingleton';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === "GET") {
     // List all agents from orchestrator (live state), robustly
     try {
       const agents = orchestrator.listAgents();
-      // Dynamically require agentManager to avoid circular deps
-      const { agentManager } = require('../../../src/orchestration/agentManager');
       const detailedAgents = agents.map(agent => {
         let health: string = 'unknown';
         let error: string | undefined = undefined;

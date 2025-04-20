@@ -5,7 +5,7 @@ jest.mock('../../../src/orchestration/supabaseAgentOps', () => ({
 
 import handler from './index';
 import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../../src/orchestration/agentManager';
+import { agentManager } from '../../../src/orchestration/agentManagerSingleton';
 import { createMocks } from 'node-mocks-http';
 
 describe('/api/agents/index API', () => {

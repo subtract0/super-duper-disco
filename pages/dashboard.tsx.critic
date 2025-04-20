@@ -1,0 +1,371 @@
+### Schnörkelloser Code‑Review (React Dashboard)
+
+| Kategorie | Auffälligkeit | Warum das ungut ist | Kurz‑Fix |
+|-----------|---------------|---------------------|----------|
+| **Daten‑Typen** | `interface OrchestratorState { health: Record<string,string>; … }` – du liest später `health.uptimePercent`, `health.mttr`, `health.status` … | Typ‑Mismatches → TS liefert keine Hilfe, Runtime‑Fehler drohen. | Erstelle eine saubere `AgentHealth`‑Schnittstelle und nutze sie im State. |
+| **Doppelte Logik** | Block für `status / color / anomaly` ist **zweimal** kopiert. | Wartungs‑Hölle, Bug‑Risiko. | Extrahiere `getHealthDisplay(health)`‑Helper. |
+| **Inline‑Functions in JSX** | `<SendTestMessage … />` + mehrere IIFEs innerhalb von `render()`. | Jede Render‑Phase baut neue Funktionen → unnötige Re‑Renders. | Move Helpers nach oben (`const Chart = ({messages}) => …`). |
+| **`setInterval` ohne Cleanup‑Deps** | Statischer 3‑Sek‑Pull; kein Visibility‑Check. | Zieht Akku leer & macht 404‑Spam wenn Tab in Hintergrund. | `useEffect(()=>{ …; return ()=>clear… },[])` + `document.visibilitychange`. |
+| **`setLoading(true)` bei jedem Poll** | UI flickert alle 3 Sek. | Unruhiges UX. | Lade‑Spinner nur beim **ersten** Fetch oder wenn Request > 500 ms dauert. |
+| **`setTimeout(() => window.location.reload(), 600)`** | Hartes Reload nach Operation. | State & scroll‑Position gehen verloren; teuer. | Nach POST einfach `fetchState()` aufrufen. |
+| **Riesige Inline‑Styles** | 700+ LOC in einer Datei. | Unlesbar, kein Dark‑Mode. | CSS‑Klassen / Tailwind oder Styled‑Components. |
+| **Schwergewichtige Tabellen** | `.map` → `slice` → `reverse` bei jeder Render‑Phase. | O(n²) wenn Messages >wird groß. | Memoisiere gefilterte Daten mit `useMemo`. |
+| **CSV/JSON‑Download Logic im Render** | Erzeugt Blob & DOM‑Element _jedes_ Mal, wenn Button gerendert wird. | Function‑Bodies sollten idempotent sein. | Verlager in `handleExport('csv' | 'json')`. |
+| **Key Collisions** | `key={idx}` bei Logs. | Bei Filterung ändern sich Indizes → React re‑mounted DOM. | Nutze echte IDs oder Timestamp. |
+| **Security** | JSON → `<pre>`: Keine XSS‑Escape. | If backend schickt `<script>`, bist du dran. | `dangerouslySetInnerHTML` vermeiden, Text escapen. |
+
+---
+
+#### Mini‑Refactor‑Skizze
+
+```tsx
+// types.ts
+export interface AgentHealth {
+  status: 'running' | 'stopped' | 'crashed';
+  lastHeartbeat?: number;
+  uptime?: number;
+  crashCount?: number;
+  uptimePercent?: number;
+  mttr?: number;
+  downtime?: number;
+}
+
+export interface OrchestratorState {
+  state: string;
+  health: Record<string, AgentHealth>;
+  logs: string[];
+  messages: any[];
+}
+
+// utils/getHealthDisplay.ts
+export function getHealthDisplay(h: AgentHealth) {
+  let anomaly = '';
+  let bg      = '#eaffea';
+  if (h.status === 'crashed') { bg='#ffeaea'; anomaly='Crashed'; }
+  else if (h.status === 'stopped') { bg='#fffbe6'; anomaly='Stopped'; }
+  else if (Date.now()- (h.lastHeartbeat||0) > 120_000) { bg='#e0e0e0'; anomaly='No heartbeat'; }
+  return { bg, anomaly };
+}
+```
+
+*(…volle Patch‑Datei würde >300 Zeilen sparen – auf Wunsch gern komplett.)*
+
+---
+
+### Nächster Schritt?
+
+> **Prompt‑Vorschlag**  
+> „Refaktoriere das Dashboard in ‹/src/app/dashboard/page.tsx› so, dass 🍃 `useSWR` für Polling, getHealthDisplay‑Helper, und extrahierte `HealthTable`, `LogPane`, `MessagePane` Komponenten genutzt werden. Bitte komplette Datei liefern.“
+
+
+```
+app/
+└─ dashboard/
+   ├─ page.tsx
+   └─ components/
+      ├─ HealthTable.tsx
+      ├─ LogsPane.tsx
+      └─ MessagesPane.tsx
+```
+
+---
+
+### **app/dashboard/page.tsx**
+```tsx
+'use client';
+
+import useSWR from 'swr';
+import { useState } from 'react';
+import HealthTable     from './components/HealthTable';
+import LogsPane        from './components/LogsPane';
+import MessagesPane    from './components/MessagesPane';
+
+const fetcher = (url: string) => fetch(url).then(r => {
+  if (!r.ok) throw new Error('fetch failed');
+  return r.json();
+});
+
+export default function Dashboard() {
+  const { data, error, isLoading, mutate } = useSWR('/api/orchestrator-state', fetcher, {
+    refreshInterval: 3000,           // auto poll
+    revalidateOnFocus: false,
+  });
+
+  /* local filter state */
+  const [filters, setFilters] = useState<{ from?: string; to?: string; body?: string }>({});
+
+  if (isLoading) return <div style={styles.container}>Loading…</div>;
+  if (error)      return <div style={styles.container}>❌ {String(error)}</div>;
+  if (!data)      return null;
+
+  return (
+    <div style={styles.container}>
+      <h1>Cascade Orchestrator Dashboard</h1>
+
+      <h2>Protocol State: <span style={{ color:'#0070f3' }}>{data.state}</span></h2>
+
+      <HealthTable
+        health={data.health}
+        onRestart={id => postAction('restart', id, mutate)}
+        onStop   ={id => postAction('stop',    id, mutate)}
+      />
+
+      <LogsPane logs={data.logs} />
+
+      <MessagesPane
+        messages={data.messages}
+        filters={filters}
+        onChangeFilters={setFilters}
+      />
+    </div>
+  );
+}
+
+const postAction = async (action: 'restart'|'stop', id: string, refresh: ()=>void) => {
+  await fetch('/api/agent-control', {
+    method : 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body   : JSON.stringify({ action, id }),
+  });
+  refresh();
+};
+
+const styles = {
+  container: {
+    fontFamily: 'sans-serif',
+    padding   : 24,
+    maxWidth  : 1000,
+    margin    : '0 auto',
+  } as const,
+};
+```
+
+---
+
+### **app/dashboard/components/HealthTable.tsx**
+```tsx
+import React from 'react';
+
+interface AgentHealth {
+  status        : 'running'|'stopped'|'crashed'|'error';
+  lastHeartbeat?: number;
+  uptime?       : number;
+  crashCount?   : number;
+  uptimePercent?: number;
+  mttr?         : number;
+  downtime?     : number;
+}
+
+interface Props {
+  health: Record<string, AgentHealth | string>;
+  onRestart: (id: string) => void;
+  onStop   : (id: string) => void;
+}
+
+export default function HealthTable({ health, onRestart, onStop }: Props) {
+  return (
+    <>
+      <h3>Agent Health</h3>
+      <table style={tableStyle}>
+        <thead>
+          <tr>
+            {['Agent','Health','Uptime','Crashes','Heartbeat','Up %','MTTR','Down','Actions']
+              .map(h => <th key={h} style={thTd}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(health).map(([id, h]) => renderRow(id, h, onRestart, onStop))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+/* ---------- helpers ---------- */
+
+const renderRow = (
+  id: string,
+  health: AgentHealth | string,
+  restart: (id:string)=>void,
+  stop   : (id:string)=>void
+) => {
+  const h = typeof health === 'string' ? { status: health } as AgentHealth : health;
+
+  const { bg, anomaly } = getDisplay(h);
+
+  return (
+    <tr key={id} style={{ background:bg }} title={anomaly}>
+      <td style={thTd}>{id}</td>
+      <td style={thTd}>
+        {h.status}
+        {anomaly && <span style={{ color:'#b00',marginLeft:6,fontWeight:500,fontSize:13 }}>{anomaly}</span>}
+      </td>
+      <td style={thTd}>{fmtSec(h.uptime)}</td>
+      <td style={thTd(styleDanger(h.crashCount!>2))}>{h.crashCount??''}</td>
+      <td style={thTd}>{h.lastHeartbeat ? new Date(h.lastHeartbeat).toLocaleTimeString():''}</td>
+      <td style={thTd(styleDanger((h.uptimePercent??1)<0.95))}>{pct(h.uptimePercent)}</td>
+      <td style={thTd(styleDanger((h.mttr??0)>120000))}>{fmtSec(h.mttr)}</td>
+      <td style={thTd}>{fmtSec(h.downtime)}</td>
+      <td style={thTd}>
+        <button onClick={()=>restart(id)} style={btn}>Restart</button>
+        <button onClick={()=>stop(id)}    style={btn}>Stop</button>
+      </td>
+    </tr>
+  );
+};
+
+/* ---------- tiny utils ---------- */
+const tableStyle = { borderCollapse:'collapse', marginBottom:24 };
+const thTd      = (extra?:object) => ({ border:'1px solid #ccc',padding:8, ...extra});
+const btn       = { fontSize:12, marginRight:4 };
+
+const styleDanger = (cond:boolean) => cond ? { color:'#b00',fontWeight:600 } : undefined;
+
+const fmtSec = (ms?:number) => ms!=null ? `${Math.floor(ms/1000)}s` : '';
+const pct    = (n?:number)  => n!=null ? `${(n*100).toFixed(1)}%` : '';
+
+const getDisplay = (h: AgentHealth) => {
+  let bg = '#eaffea', anomaly='';
+  if (h.status==='crashed' || h.status==='error') { bg='#ffeaea'; anomaly='Crashed'; }
+  else if (h.status==='stopped') { bg='#fffbe6'; anomaly='Stopped'; }
+  else if (Date.now()-(h.lastHeartbeat??0) > 120_000) { bg='#e0e0e0'; anomaly='No heartbeat'; }
+  return { bg, anomaly };
+};
+```
+
+---
+
+### **app/dashboard/components/LogsPane.tsx**
+```tsx
+interface Props { logs: string[] }
+
+export default function LogsPane({ logs }: Props) {
+  return (
+    <>
+      <h3>Recent Logs</h3>
+      <div style={box}>
+        <ul style={{ listStyle:'none',margin:0,padding:0 }}>
+          {logs.slice(-50).map((l,i)=>(
+            <li key={`${i}-${l}`} style={{ fontSize:14,marginBottom:4 }}>{l}</li>
+          ))}
+        </ul>
+      </div>
+    </>
+  );
+}
+
+const box = {
+  background:'#f9f9f9',
+  border:'1px solid #eee',
+  padding:16,
+  maxHeight:320,
+  overflowY:'auto',
+} as const;
+```
+
+---
+
+### **app/dashboard/components/MessagesPane.tsx**
+```tsx
+import { useMemo } from 'react';
+
+interface Msg {
+  id?: string;
+  from: string;
+  to: string;
+  body: unknown;
+  type?: string;
+  threadId?: string;
+  version?: string;
+  protocol?: string;
+  createdAt?: number;
+}
+
+interface Filters { from?:string; to?:string; body?:string }
+
+interface Props {
+  messages: Msg[];
+  filters: Filters;
+  onChangeFilters: (f: Filters)=>void;
+}
+
+export default function MessagesPane({ messages, filters, onChangeFilters }: Props) {
+  /* filtered & latest 20 */
+  const view = useMemo(()=>(
+    messages
+      .filter(m =>
+        (!filters.from || m.from===filters.from) &&
+        (!filters.to   || m.to===filters.to)     &&
+        (!filters.body || JSON.stringify(m.body).toLowerCase().includes(filters.body.toLowerCase()))
+      )
+      .slice(-20)
+      .reverse()
+  ),[messages,filters]);
+
+  return (
+    <>
+      <h3>Agent‑to‑Agent Messages</h3>
+
+      <FilterBar messages={messages} filters={filters} onChange={onChangeFilters} />
+
+      <div style={pane}>
+        {view.length ? (
+          <table style={{ borderCollapse:'collapse',width:'100%' }}>
+            <thead><tr>
+              {['From','To','Body','Time'].map(h=>(
+                <th key={h} style={thTd}>{h}</th>
+              ))}
+            </tr></thead>
+            <tbody>
+              {view.map(m=>(
+                <tr key={m.id || Math.random()}>
+                  <td style={thTd}>{m.from}</td>
+                  <td style={thTd}>{m.to}</td>
+                  <td style={thTd}><pre style={pre}>{JSON.stringify(m.body)}</pre></td>
+                  <td style={thTd}>{m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <span style={{ color:'#888' }}>No messages</span>}
+      </div>
+    </>
+  );
+}
+
+/* ---------- Filter UI ---------- */
+function FilterBar({ messages, filters, onChange }: { messages:Msg[]; filters:Filters; onChange:(f:Filters)=>void }) {
+  const agents = Array.from(new Set(messages.flatMap(m=>[m.from,m.to]))).filter(Boolean);
+
+  return (
+    <div style={{ display:'flex',gap:12,alignItems:'center',marginBottom:12 }}>
+      <select value={filters.from||''} onChange={e=>onChange({ ...filters, from:e.target.value||undefined })}>
+        <option value=''>From: all</option>
+        {agents.map(a=> <option key={a} value={a}>{a}</option>)}
+      </select>
+      <select value={filters.to||''} onChange={e=>onChange({ ...filters, to:e.target.value||undefined })}>
+        <option value=''>To: all</option>
+        {agents.map(a=> <option key={a} value={a}>{a}</option>)}
+      </select>
+      <input
+        placeholder='Search body…'
+        value={filters.body||''}
+        onChange={e=>onChange({ ...filters, body:e.target.value||undefined })}
+        style={{ padding:4,fontSize:14 }}
+      />
+      <button onClick={()=>onChange({})}>Clear</button>
+    </div>
+  );
+}
+
+/* ---------- styles ---------- */
+const pane  = { background:'#f6f8fa',border:'1px solid #eee',padding:16,maxHeight:320,overflowY:'auto' } as const;
+const thTd  = { border:'1px solid #ccc', padding:8, verticalAlign:'top' } as const;
+const pre   = { margin:0, whiteSpace:'pre-wrap', fontSize:12 } as const;
+```
+
+Damit ist das Dashboard:
+
+* **komponentisiert** – leichter zu testen & erweitern.  
+* **SWR‑basiert** – automatisches Polling ohne manuelles `setInterval`.  
+* **ohne doppelte Logik**, klare Helfer‑Funktionen, keine Inline‑Funktionen in JSX‑Listen.  

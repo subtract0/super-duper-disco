@@ -78,7 +78,7 @@ export class AgentMessageMemory {
           user_id: record.user_id,
           agent_id: record.agent_id
         }
-      ], { returning: 'representation' });
+      ]);
     if (error) {
       console.error('[AgentMessageMemory.save] Supabase insert error:', error, '\nMessage:', mcpEnvelope.body);
       throw new Error(`[AgentMessageMemory.save] Supabase error: ${typeof error === 'object' && error.message ? error.message : JSON.stringify(error)} (MCP envelope: ${JSON.stringify(mcpEnvelope.body)})`);

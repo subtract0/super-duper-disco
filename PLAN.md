@@ -31,9 +31,27 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
   - **2025-04-20:** All protocol adapters now have Jest-based tests for compliance and edge cases. CI integration ensures regression testing for every adapter. See `src/protocols/__tests__` and `jest.protocol.config.cjs` for details.
 
 ### 1. Multi-Agent Orchestration Foundation
+
+### 2. Autonomous Test Recovery: Telegram Bot Test Suite
+- [x] **Objective: Restore and pass all Telegram bot tests after file corruption**
+  - [x] Diagnose root cause (file corruption from repeated edits)
+  - [x] Surface and fix all remaining test failures (add logging, debug mocks)
+  - [x] Remove temporary sanity test after all pass
+  - **2025-04-20:** All Telegram bot tests now pass. Handler logic for `/stop <id>` and unknown agents is robust, with actionable error/help messages. Orchestrator mocks in tests now include `getAgent` and `listAgents` to match production logic. All tests green. Next: propagate error handling improvements to other agent commands and conversational flows, and keep PLAN.md updated.
+  - **2025-04-20:** Error handling for `/delete <id>` and `/update-config <id>` is now robust. The bot sends actionable, user-friendly messages if a user tries to delete or update a non-existent agent, both for direct commands and in dialogue. Invalid config JSON is also handled with clear feedback. Next: propagate this pattern to `/launch` and ensure all flows are covered by tests.
+  - **2025-04-20:** Error handling for `/launch <id> [type]` is now robust. The bot provides actionable, user-friendly messages for invalid/duplicate launches and surfaces config errors clearly. All flows are covered by tests. **NOTE:** All agent mocks in orchestration and Telegram bot tests must implement the EventEmitter interface (e.g., use BaseAgent or an EventEmitter subclass). This prevents `TypeError: agent.on is not a function` during deployAgent calls.
+  - **2025-04-20:** Migrated the QCAgent review test to its own integration test file (qcAgent.integration.test.ts) using dependency injection. This avoids fetch/polyfill issues caused by real SDK imports in orchestrator tests.
+- All agent mocks must implement the EventEmitter interface to prevent TypeError during deployment and orchestration tests.
+- Orchestrator and agent tests are now modular, regression-proofed, and kept under 200-300 lines per file as per codebase rules.
+- Real SDKs (e.g., openai, langchain) should not be imported in orchestrator tests unless strictly necessary; use dependency injection and minimal mocks for all agent logic.
+- The approach ensures robust, environment-agnostic tests and aligns with project maintainability and modularity goals.
+- **2025-04-20:** Telegram bot agent control flows (/stop, /restart, /delete, /update-config, /launch, etc.) now have consistent, actionable, and regression-proof error handling. User-friendly messages are provided for missing/invalid agent IDs, config, or commands. Fallback/default branches always give feedback, and dialogue state handling prompts for missing info. This pattern must be followed for all new commands and features to maintain UX and code quality.
+  - **2025-04-20:** Regression patch: All agent mocks in orchestration tests (e.g., agentManager.factory.test.ts, agentManager.test.ts) now use EventEmitter-compatible mocks. This resolves the `agent.on is not a function` error in those tests and fully regression-proofs orchestration agent mocks. Note: The fetch polyfill (undici) must be loaded at the very top of the Jest setup, before any SDK imports, to avoid environment errors. Some environment errors persist in agentOrchestrator.test.ts and related files; these will be triaged next.
+ble, user-friendly messages for duplicate agent IDs, missing/invalid types, and other launch errors, both for direct commands and dialogue. All major agent control flows now have consistent, robust error handling.
+
 - [x] **Objective: Refactor and extend the Agent Manager and Orchestrator for dynamic, in-memory agent lifecycle management and health monitoring**
   - [x] Agents can be launched, stopped, monitored, and auto-recovered (via Telegram: `/launch`, `/stop <id>`, `/restart <id>`, `/status`)
-  - [x] Health status, logs, and live state are accessible via Telegram dashboard
+{{ ... }}
   - [x] Modular support for native, LangChain, and AutoGen agents
   - [x] Audit/refactor `agentManager.ts` and `agentOrchestrator.ts`
   - [x] In-memory health store, heartbeats, auto-restart
@@ -74,6 +92,13 @@ This plan is maintained according to the [Cascade Autonomous Development Protoco
 - **Action:** Proceed to review and patch conversational flow tests, update PLAN.md and TESTING.md after each fix.
 
 ---
+
+### 2025-04-20: Modular Telegram Bot Refactor Complete
+- All Telegram bot command, dialogue, and file logic is now modularized in `src/telegram/` (`types.ts`, `intentParser.ts`, `dialogueState.ts`, `fileService.ts`, `telegramApi.ts`, `controller.ts`, `handler.ts`).
+- `pages/api/telegram.ts` is a thin wrapper delegating to the modular handler.
+- Orchestrator is now wired to the live `agentManager` and `MessageBus`, so all bot commands operate on real in-memory agent state.
+- All top-level side effects, secret logging, and monolithic logic have been removed.
+- **Next:** Migrate/validate tests for all conversational flows, ensure robust error handling, and update documentation. Maintain PLAN.md after each major step.
 
 ## Milestone (2025-04-20): Telegram Agent Management Test Suite Unblocked, Failing Tests Remain
 

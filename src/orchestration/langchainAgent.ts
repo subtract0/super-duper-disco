@@ -1,17 +1,22 @@
 import { ChatOpenAI } from "@langchain/openai";
 import { HumanMessage, SystemMessage } from "@langchain/core/messages";
 
-export class LangChainAgent {
+import { EventEmitter } from 'events';
+import { AgentLike } from './agents/BaseAgent';
+
+export class LangChainAgent extends EventEmitter implements AgentLike {
   id: string;
+  name: string;
   status: 'stopped' | 'running';
+  private _logs: string[] = [];
   model: ChatOpenAI;
-  logs: string[];
-  heartbeatInterval: NodeJS.Timeout | null = null;
+  beatTimer?: NodeJS.Timeout;
 
   constructor(id: string, openAIApiKey: string) {
+    super();
     this.id = id;
+    this.name = 'langchain';
     this.status = 'stopped';
-    this.logs = [];
     this.model = new ChatOpenAI({
       openAIApiKey,
       temperature: 0.7,
@@ -19,24 +24,20 @@ export class LangChainAgent {
     });
   }
 
-  async start() {
+  start(): void {
     this.status = 'running';
-    this.logs.push(`[${new Date().toISOString()}] LangChain agent started`);
-    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
-    this.heartbeatInterval = setInterval(() => {
-      if (typeof (this as any).updateHeartbeat === 'function') {
-        (this as any).updateHeartbeat();
-      }
+    this.log('LangChain agent started');
+    this.emit('heartbeat', { ts: Date.now(), type: 'heartbeat' });
+    this.beatTimer = setInterval(() => {
+      this.emit('heartbeat', { ts: Date.now(), type: 'heartbeat' });
+      this.log('LangChain agent heartbeat');
     }, 5000);
-    if (typeof (this as any).updateHeartbeat === 'function') {
-      (this as any).updateHeartbeat();
-    }
   }
 
-  async stop() {
+  stop(): void {
     this.status = 'stopped';
-    this.logs.push(`[${new Date().toISOString()}] LangChain agent stopped`);
-    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+    this.log('LangChain agent stopped');
+    if (this.beatTimer) clearInterval(this.beatTimer);
   }
 
   async chat(input: string): Promise<string> {
@@ -55,15 +56,18 @@ export class LangChainAgent {
     } else {
       text = JSON.stringify(response.content);
     }
-    this.logs.push(`[${new Date().toISOString()}] User: ${input}`);
-    this.logs.push(`[${new Date().toISOString()}] Agent: ${text}`);
+    this.log(`User: ${input}`);
+    this.log(`Agent: ${text}`);
     return text;
   }
 
-  getLogs() {
-    return this.logs.slice(-20);
+  log(msg: string): void {
+    this._logs.push(`[${new Date().toISOString()}] ${msg}`);
+  }
+
+  getLogs(): string[] {
+    return this._logs.slice(-20);
   }
 }
 
 export default LangChainAgent;
-

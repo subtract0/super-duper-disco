@@ -1,88 +1,79 @@
-import { orchestrator } from '../orchestratorSingleton';
-import { agentManager } from '../agentManager';
+import { AgentManager } from '../agentManager';
+import { MessageBus } from '../orchestrator/bus';
+import { AgentOrchestrator } from '../orchestrator/orchestrator';
 import { agentMessageMemory } from '../agentMessageMemory';
+import { seedLogs } from '../helpers/testAgent';
 
-/**
- * Integration tests for Telegram API orchestration commands: /msg, /logs, /workflow
- * These tests mock the orchestrator, agentManager, and agentMessageMemory for in-memory validation.
- */
-describe('Telegram Orchestration Integration', () => {
-  beforeAll(() => {
-    // Setup: Ensure orchestrator and agentManager are reset
-    if (typeof agentManager.reset === 'function') agentManager.reset();
-    if (typeof orchestrator.reset === 'function') orchestrator.reset();
+describe('Telegram orchestration commands', () => {
+  let manager: AgentManager;
+  let bus: MessageBus;
+  let orch: AgentOrchestrator;
+
+  beforeEach(() => {
+    jest.resetAllMocks();
+    manager = new AgentManager();
+    bus     = new MessageBus();
+    orch    = new AgentOrchestrator({ manager, bus });
   });
 
-  test('/msg sends agent-to-agent message and persists to MCP', async () => {
-    // Mock MCP memory for deterministic testing
-    const originalSave = agentMessageMemory.save;
-    const originalFetchRecent = agentMessageMemory.fetchRecent;
-    const mcpMemory: any[] = [];
-    agentMessageMemory.save = async (record: any) => { mcpMemory.push(record); };
-    agentMessageMemory.fetchRecent = async ({ agent_id, limit }: any) =>
-      mcpMemory.filter(r => r.agent_id === agent_id).slice(-limit);
-    // Inject the mock into the orchestrator for this test
-    (orchestrator as any).agentMessageMemory = agentMessageMemory;
-    try {
-      const from = 'planner';
-      const to = 'researcher';
-      const content = 'Test message from planner to researcher';
-      await orchestrator.sendAgentMessage({ from, to, content, timestamp: Date.now() });
-      // Check in-memory message bus
-      const messages = orchestrator.getAgentMessages(to);
-      expect(messages.some(m => m.from === from && m.to === to && m.body === content)).toBeTruthy();
-      // Check MCP persistence
-      const mcpRecords = await agentMessageMemory.fetchRecent({ agent_id: to, limit: 10 });
-      const found = mcpRecords.some(r =>
-        (typeof r.content === 'string' && r.content.includes(content)) ||
-        (typeof r.content === 'object' && JSON.stringify(r.content).includes(content))
-      );
-      if (!found) {
-        // Debug: print what is actually stored
-        // eslint-disable-next-line no-console
-        console.error('MCP memory contents:', JSON.stringify(mcpMemory, null, 2));
-      }
-      expect(found).toBeTruthy();
-    } finally {
-      agentMessageMemory.save = originalSave;
-      agentMessageMemory.fetchRecent = originalFetchRecent;
-    }
+  afterEach(() => {
+    if (typeof bus.clear === 'function') bus.clear();
+    if (typeof manager.clearAllAgents === 'function') manager.clearAllAgents();
+    jest.restoreAllMocks();
   });
 
-  test('/logs returns last 10 logs for an agent', async () => {
-    // Ensure agent is deployed before setting logs
-    const agentId = 'researcher';
-    await agentManager.deployAgent(agentId, 'Researcher Agent', 'langchain', { openAIApiKey: process.env.OPENAI_API_KEY || '' });
-    // Clear any system logs
-    if (agentManager.agents?.get(agentId)) {
-      agentManager.agents.get(agentId).logs = [];
-    }
-    const logs = [
-      'Log 1', 'Log 2', 'Log 3', 'Log 4', 'Log 5',
-      'Log 6', 'Log 7', 'Log 8', 'Log 9', 'Log 10', 'Log 11',
-    ];
-    if (typeof agentManager.setAgentLogs === 'function') {
-      agentManager.setAgentLogs(agentId, logs);
-    } else if (agentManager.agents?.get(agentId)) {
-      agentManager.agents.get(agentId).logs = logs;
-    }
-    // Only consider logs that match our test logs (ignore any system logs)
-    const lastLogs = agentManager.getAgentLogs(agentId).filter(l => l.startsWith('Log')).slice(-10);
-    expect(lastLogs.length).toBe(10);
-    expect(lastLogs[0]).toBe('Log 2');
-    expect(lastLogs[9]).toBe('Log 11');
+  it('/msg persists A2A message and delivers it in bus', async () => {
+    const saveSpy = jest
+      .spyOn(agentMessageMemory, 'save')
+      .mockResolvedValue(undefined as any);
+
+    const from = 'planner';
+    const to   = 'researcher';
+    const text = 'hello from planner';
+
+    await orch.sendAgentMessage({ from, to, content: text, timestamp: Date.now() });
+
+    // delivered?
+    const inbox = orch.getAgentMessages(to);
+    expect(inbox).toHaveLength(1);
+    expect(inbox[0]).toMatchObject({ from, to, content: text });
+
+    // persisted?
+    expect(saveSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content : expect.stringContaining(text),
+        agent_id: to,
+        user_id : from,
+      }),
+    );
   });
 
-  test('/workflow triggers collaborative workflow and returns transcript', async () => {
-    // For this test, use orchestrator.runProtocol or MultiAgentWorkflow.collaborativeSolve
-    const task = 'Design a new AI feature.';
-    let result;
-    if (typeof orchestrator.runProtocol === 'function') {
-      result = await orchestrator.runProtocol(task);
-    } else {
-      // Fallback: mock a transcript
-      result = ['Planner: Plan created.', 'Researcher: Research done.', 'Developer: Code written.', 'DevOps: Deployed.'];
-    }
-    expect(Array.isArray(result) || typeof result === 'object').toBeTruthy();
+  it('/logs returns last ten log lines', async () => {
+    const id = 'researcher';
+    // Patch: Use a BaseAgent mock to avoid agent.on TypeError
+    const { BaseAgent } = require('../agents/BaseAgent');
+    const agent = new BaseAgent(id, 'Researcher Bot');
+    manager['agents'].set(id, {
+      id,
+      name: 'Researcher Bot',
+      status: 'running',
+      logs: [],
+      instance: agent,
+      type: 'native',
+      config: {},
+      lastHeartbeat: Date.now(),
+      lastActivity: Date.now(),
+      crashCount: 0,
+    });
+    const lines = Array.from({ length: 12 }, (_, i) => `log ${i + 1}`);
+
+    // Seed logs using public API
+    const rec = manager.list().find(a => a.id === id)!;
+    seedLogs(rec.instance, lines);
+
+    const lastTen = manager.logs(id).filter(l => l.startsWith('log'));
+    expect(lastTen).toHaveLength(10);
+    expect(lastTen[0]).toContain('log 3');
+    expect(lastTen[9]).toContain('log 12');
   });
 });

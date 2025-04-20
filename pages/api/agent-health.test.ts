@@ -1,6 +1,6 @@
 import handler from './agent-health';
 import { createMocks } from 'node-mocks-http';
-import { agentManager } from '../../src/orchestration/agentManager';
+import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 
 describe('/api/agent-health API', () => {

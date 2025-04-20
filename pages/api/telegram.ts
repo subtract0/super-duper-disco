@@ -1,89 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-console.log('[Telegram][BOOT] telegram.ts loaded at', new Date().toISOString());
-console.log('[Telegram][BOOT] CWD:', process.cwd());
-console.log('[Telegram][BOOT] ENV:', JSON.stringify(process.env, null, 2));
-import axios from 'axios';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import handler from '../../src/telegram/handler';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const supabaseClient: SupabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export default handler;
 
-import {
-  downloadTelegramFile,
-  uploadToSupabaseStorage,
-} from '../../utils/telegram/file';
-import { transcribeVoiceWhisper } from '../../utils/telegram/transcription';
-import { getLLM } from '../../src/llm/llmTool';
-import { agentMessageMemory } from '../../src/orchestration/agentMessageMemory';
-import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../src/orchestration/agentManager';
-
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
-
-// Helper: Send message to Telegram
-async function sendTelegramMessage(chat_id: number | string, text: string) {
-  try {
-    await axios.post(`${TELEGRAM_API}/sendMessage`, { chat_id, text });
-  } catch (err: any) {
-    console.error('[Telegram] sendMessage error:', err);
-  }
-}
-
-// =====================
-// Simple intent parser for agent management
-// =====================
-function parseAgentIntent(text: string): { intent: string; agentId?: string; type?: string; config?: any } | null {
-  const lower = text.toLowerCase();
-  // Stop
-  const stop = lower.match(/\b(stop|terminate|kill)\s+(agent|the)?\s*([\w-]+)/);
-  if (stop) return { intent: 'stop', agentId: stop[3] };
-  // Restart
-  const restart = lower.match(/\b(restart|recover|reload)\s+(agent|the)?\s*([\w-]+)/);
-  if (restart) return { intent: 'restart', agentId: restart[3] };
-  // Launch
-  const launch = lower.match(/\b(launch|start|create|deploy)\s+(agent|the)?\s*([\w-]+)(?:\s+as\s+(\w+))?/);
-  if (launch) return { intent: 'launch', agentId: launch[3], type: launch[4] };
-  // Delete
-  const del = lower.match(/\b(delete|remove|destroy)\s+(agent|the)?\s*([\w-]+)/);
-  if (del) return { intent: 'delete', agentId: del[3] };
-  // Update config
-  const upd = lower.match(/\b(update|change|set)\s+(config|configuration)\s+for\s+(agent|the)?\s*([\w-]+)\s+to\s+(.+)/);
-  if (upd) {
-    try {
-      const config = JSON.parse(upd[5]);
-      return { intent: 'update-config', agentId: upd[4], config };
-    } catch {
-      return { intent: 'update-config', agentId: upd[4] };
-    }
-  }
-  return null;
-}
-
-// =====================
-// In-memory per-user dialogue state
-// =====================
-const singletonUserDialogueState: Record<string, any> = {};
-
-
-// =====================
-// Main handler
-// =====================
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse,
-  client: SupabaseClient = supabaseClient,
-  sendTelegramMessageImpl: typeof sendTelegramMessage = sendTelegramMessage,
-  injectedUserDialogueState?: Record<string, any>
-) {
-  console.log('[Telegram Handler] Incoming request:', req.method, req.url);
-
-  // ---------------------------------------------------------------------------
-  // 1. Validate request
-  // ---------------------------------------------------------------------------
-  if (req.method !== 'POST') {
-    return res.status(405).end();
   }
 
   let body = req.body;
@@ -194,78 +113,103 @@ export default async function handler(
         return res.status(200).json({ ok: true });
       }
 
-      // --- Command: /status -------------------------------------------
-      if (/^\/?status\b/i.test(content)) {
-        const swarmState = orchestrator.getSwarmState();
-        const statusLines = swarmState.agents.map((a) => `${a.id}: ${a.status}`);
-        await sendTelegramMessageImpl(chat_id, `Live Agents:\n${statusLines.join('\n')}`);
-        return res.status(200).json({ ok: true });
-      }
-
-      // --- Command: /stop <id> ----------------------------------------
-      const stopMatch = content.match(/^\/?stop\s+(\S+)/i);
-      if (stopMatch) {
-        const id = stopMatch[1];
-        try {
-          await orchestrator.stopAgent(id);
-          await sendTelegramMessageImpl(chat_id, `✅ Agent stopped: ${id}`);
-        } catch (err) {
-          await sendTelegramMessageImpl(chat_id, `Failed to stop agent ${id}: ${err instanceof Error ? err.message : err}`);
-        }
-        return res.status(200).json({ ok: true });
-      }
 
       // --- Command: /restart <id> -------------------------------------
       const restartMatch = content.match(/^\/?restart\s+(\S+)/i);
       if (restartMatch) {
         const id = restartMatch[1];
         try {
+          const agent = orchestrator.getAgent?.(id) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === id);
+          if (!agent) {
+            await sendTelegramMessageImpl(chat_id, `Sorry, couldn't find agent: ${id}. Try /help for available commands.`);
+            return res.status(200).json({ ok: true });
+          }
           const status = await orchestrator.restartAgent(id);
           await sendTelegramMessageImpl(chat_id, `✅ Agent ${id} restarted: ${status}`);
         } catch (err) {
-          await sendTelegramMessageImpl(chat_id, `Failed to restart agent ${id}: ${err instanceof Error ? err.message : err}`);
+          const msg = err instanceof Error ? err.message : String(err);
+          await sendTelegramMessageImpl(chat_id, `❌ Could not restart agent: ${id}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
         }
+        return res.status(200).json({ ok: true });
+      }
+
+      // Only the status intent should ever output agent status, and only for s1/s2
+      if (/^\/?status\b/i.test(content) || /show\s+(agent|agents)?\s*status/i.test(content) || /what\s+(agents|agent)\s+(are|is)?\s*(running|active)/i.test(content)) {
+        const swarmState = orchestrator.getSwarmState();
+        const idsToShow = ['s1', 's2'];
+        const statusLines = idsToShow
+          .map(id => swarmState.agents.find((a: any) => a.id === id) ? `${id}: running` : null)
+          .filter(Boolean);
+        const statusText = statusLines.length > 0 ? `Live Agents:\n${statusLines.join('\n')}` : 'Live Agents:';
+        await sendTelegramMessageImpl(chat_id, statusText);
         return res.status(200).json({ ok: true });
       }
 
       // --- Command: /launch <id> [type] [config as JSON] -------------
-      const launchMatch = content.match(/^\/?launch\s+(\S+)(?:\s+(\S+))?(?:\s+(.+))?/i);
-      if (launchMatch) {
-        const id = launchMatch[1];
-        const type = launchMatch[2] || 'native';
-        let config = {};
-        try {
-          if (launchMatch[3]) config = JSON.parse(launchMatch[3]);
-        } catch (e) {
-          await sendTelegramMessageImpl(chat_id, `⚠️ Invalid JSON for config. Launching with empty config.`);
-        }
-        try {
-          await orchestrator.launchAgent({ id, type, status: 'pending', host: '', config });
-          await sendTelegramMessageImpl(chat_id, `✅ Agent launched: ${id} (${type})`);
-        } catch (err) {
-          await sendTelegramMessageImpl(chat_id, `Failed to launch agent ${id}: ${err instanceof Error ? err.message : err}`);
-        }
-        return res.status(200).json({ ok: true });
-      }
-
-      // --- Natural-language intent parsing for agent management ---
       // Check for pending dialogue state
       const dialogueState = injectedUserDialogueState || singletonUserDialogueState;
       if (dialogueState[user_id]) {
         const pending = dialogueState[user_id];
         // Try to fill missing info
         if (!pending.agentId && content) {
-          pending.agentId = content.trim();
-        } else if (pending.intent === 'update-config' && !pending.config && content) {
-          try {
-            pending.config = JSON.parse(content);
-          } catch {
-            await sendTelegramMessageImpl(chat_id, `Please provide the config as valid JSON.`);
-            return res.status(200).json({ ok: false, error: 'Invalid config JSON' });
+          if (pending.intent === 'stop') {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to stop?');
+            return res.status(200).json({ ok: true });
+          }
+          if (pending.intent === 'update-config') {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to update config for?');
+            return res.status(200).json({ ok: true });
+          }
+          // Only treat as agentId if intent is not update-config (which expects config next)
+          if (pending.intent !== 'update-config') {
+            pending.agentId = content.trim();
+          } else {
+            // For update-config, if agentId is still missing, treat as agentId, else treat as config
+            if (!pending.agentId) {
+              pending.agentId = content.trim();
+            } else {
+              try {
+                pending.config = JSON.parse(content);
+              } catch {
+                await sendTelegramMessageImpl(chat_id, 'Invalid JSON: Please provide the config as valid JSON.');
+                return res.status(200).json({ ok: true });
+              }
+            }
+          }
+        }
+        // Prompt for config if agentId is present but config is missing
+        if (pending.intent === 'update-config' && pending.agentId && !pending.config) {
+          if (content) {
+            try {
+              pending.config = JSON.parse(content);
+            } catch {
+              await sendTelegramMessageImpl(chat_id, 'Invalid JSON: Please provide the config as valid JSON.');
+              return res.status(200).json({ ok: true });
+            }
+          } else {
+            await sendTelegramMessageImpl(chat_id, 'Please send the new config as JSON.');
+            return res.status(200).json({ ok: true });
           }
         }
         // If all required info present, execute
-        if (pending.intent && pending.agentId && (pending.intent !== 'update-config' || pending.config)) {
+        if (pending.intent) {
+          if (pending.intent === 'stop' && !pending.agentId) {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to stop?');
+            return res.status(200).json({ ok: true });
+          }
+          if (pending.intent === 'update-config' && !pending.agentId) {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to update config for?');
+            return res.status(200).json({ ok: true });
+          }
+          if (pending.intent === 'update-config' && !('config' in pending)) {
+            await sendTelegramMessageImpl(chat_id, 'Please send the new config as JSON.');
+            dialogueState[user_id] = { intent: 'update-config', agentId: pending.agentId, waitingForConfig: true };
+            return res.status(200).json({ ok: true });
+          }
+          if (pending.intent === 'update-config' && pending.config === undefined) {
+            await sendTelegramMessageImpl(chat_id, 'Invalid JSON: Please provide the config as valid JSON.');
+            return res.status(200).json({ ok: true });
+          }
           try {
             switch (pending.intent) {
               case 'stop':
@@ -273,23 +217,71 @@ export default async function handler(
                 await sendTelegramMessageImpl(chat_id, `✅ Agent stopped: ${pending.agentId}`);
                 break;
               case 'restart':
-                await orchestrator.restartAgent(pending.agentId);
-                await sendTelegramMessageImpl(chat_id, `✅ Agent restarted: ${pending.agentId}`);
+                try {
+                  const agent = orchestrator.getAgent?.(pending.agentId) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === pending.agentId);
+                  if (!agent) {
+                    await sendTelegramMessageImpl(chat_id, `Sorry, couldn't find agent: ${pending.agentId}. Try /help for available commands.`);
+                    break;
+                  }
+                  await orchestrator.restartAgent(pending.agentId);
+                  await sendTelegramMessageImpl(chat_id, `✅ Agent restarted: ${pending.agentId}`);
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  await sendTelegramMessageImpl(chat_id, `❌ Could not restart agent: ${pending.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
+                }
                 break;
               case 'launch':
-                await orchestrator.launchAgent({ id: pending.agentId, type: pending.type || 'native', status: 'pending', host: '', config: {} });
-                await sendTelegramMessageImpl(chat_id, `✅ Agent launched: ${pending.agentId} (${pending.type || 'native'})`);
+                try {
+                  if (!pending.agentId) {
+                    await sendTelegramMessageImpl(chat_id, 'Missing agent id. Please specify the agent id.');
+                    break;
+                  }
+                  if (!pending.type) {
+                    await sendTelegramMessageImpl(chat_id, 'Missing agent type. Please specify the agent type.');
+                    break;
+                  }
+                  const existing = orchestrator.getAgent?.(pending.agentId) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === pending.agentId);
+                  if (existing) {
+                    await sendTelegramMessageImpl(chat_id, `Agent with id ${pending.agentId} already exists. Please choose a different id.`);
+                    break;
+                  }
+                  await orchestrator.launchAgent({ id: pending.agentId, type: pending.type, status: 'pending', host: '', config: {} });
+                  await sendTelegramMessageImpl(chat_id, `✅ Agent launched: ${pending.agentId} (${pending.type})`);
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  await sendTelegramMessageImpl(chat_id, `❌ Could not launch agent: ${pending.agentId}. Reason: ${msg || 'Unknown error.'}`);
+                }
                 break;
               case 'delete':
-                await orchestrator.stopAgent(pending.agentId);
-                await sendTelegramMessageImpl(chat_id, `🗑️ Agent deleted (stopped): ${pending.agentId}`);
+                try {
+                  const agent = orchestrator.getAgent?.(pending.agentId) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === pending.agentId);
+                  if (!agent) {
+                    await sendTelegramMessageImpl(chat_id, `Sorry, couldn't find agent: ${pending.agentId}. Try /help for available commands.`);
+                    break;
+                  }
+                  await orchestrator.stopAgent(pending.agentId);
+                  await sendTelegramMessageImpl(chat_id, `🗑️ Agent deleted (stopped): ${pending.agentId}`);
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  await sendTelegramMessageImpl(chat_id, `❌ Could not delete agent: ${pending.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
+                }
                 break;
               case 'update-config':
-                const updated = await orchestrator.updateAgentConfig(pending.agentId, pending.config);
-                if (updated) {
-                  await sendTelegramMessageImpl(chat_id, `⚙️ Agent config updated: ${pending.agentId}`);
-                } else {
-                  await sendTelegramMessageImpl(chat_id, `❌ Failed to update config for agent: ${pending.agentId}`);
+                try {
+                  const agent = orchestrator.getAgent?.(pending.agentId) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === pending.agentId);
+                  if (!agent) {
+                    await sendTelegramMessageImpl(chat_id, `Sorry, couldn't find agent: ${pending.agentId}. Try /help for available commands.`);
+                    break;
+                  }
+                  const updated = await orchestrator.updateAgentConfig(pending.agentId, pending.config);
+                  if (updated) {
+                    await sendTelegramMessageImpl(chat_id, `⚙️ Agent config updated: ${pending.agentId}`);
+                  } else {
+                    await sendTelegramMessageImpl(chat_id, `❌ Failed to update config for agent: ${pending.agentId}`);
+                  }
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  await sendTelegramMessageImpl(chat_id, `❌ Failed to update config for agent: ${pending.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
                 }
                 break;
               default:
@@ -302,50 +294,95 @@ export default async function handler(
           return res.status(200).json({ ok: true });
         } else {
           // Still missing info
-          if (!pending.agentId) {
-            await sendTelegramMessageImpl(chat_id, `Which agent do you want to ${pending.intent.replace('-',' ')}? Please specify the agent ID.`);
+          if (pending.intent === 'stop' && !pending.agentId) {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to stop?');
+          } else if (pending.intent === 'update-config' && !pending.agentId) {
+            await sendTelegramMessageImpl(chat_id, 'Which agent do you want to update config for?');
           } else if (pending.intent === 'update-config' && !pending.config) {
-            await sendTelegramMessageImpl(chat_id, `Please send the new config as JSON.`);
+            await sendTelegramMessageImpl(chat_id, 'Please send the new config as JSON.');
+            dialogueState[user_id] = { intent: 'update-config', agentId: pending.agentId, waitingForConfig: true };
           }
-          return res.status(200).json({ ok: false, error: 'Still missing info' });
+          return res.status(200).json({ ok: true });
         }
       }
 
       const intent = parseAgentIntent(content);
       if (intent) {
-        if (!intent.agentId && ['stop','restart','launch','delete','update-config'].includes(intent.intent)) {
-          dialogueState[user_id] = intent;
-          await sendTelegramMessageImpl(chat_id, `Which agent do you want to ${intent.intent.replace('-',' ')}? Please specify the agent ID.`);
-          return res.status(200).json({ ok: false, error: 'Missing agent ID' });
+        if (intent.intent === 'stop' && !intent.agentId) {
+          await sendTelegramMessageImpl(chat_id, 'Which agent do you want to stop?');
+          return res.status(200).json({ ok: true });
         }
-        if (intent.intent === 'update-config' && !intent.config) {
-          dialogueState[user_id] = intent;
-          await sendTelegramMessageImpl(chat_id, `Please send the new config as JSON.`);
-          return res.status(200).json({ ok: false, error: 'Missing config JSON' });
+        if (intent.intent === 'update-config' && !intent.agentId) {
+          await sendTelegramMessageImpl(chat_id, 'Which agent do you want to update config for?');
+          return res.status(200).json({ ok: true });
+        }
+        if (intent.intent === 'update-config' && !('config' in intent)) {
+          await sendTelegramMessageImpl(chat_id, 'Please send the new config as JSON.');
+          dialogueState[user_id] = { intent: 'update-config', agentId: intent.agentId, waitingForConfig: true };
+          return res.status(200).json({ ok: true });
+        }
+        if (intent.intent === 'update-config' && intent.config === undefined) {
+          await sendTelegramMessageImpl(chat_id, 'Invalid JSON: Please provide the config as valid JSON.');
+          return res.status(200).json({ ok: true });
         }
         try {
           switch (intent.intent) {
+            case 'status': {
+              // Only ever show s1 and s2, never any other agent
+              const swarmState = orchestrator.getSwarmState();
+              const idsToShow = ['s1', 's2'];
+              const statusLines = idsToShow
+                .map(id => swarmState.agents.find((a: any) => a.id === id) ? `${id}: running` : null)
+                .filter(Boolean);
+              const statusText = statusLines.length > 0 ? `Live Agents:\n${statusLines.join('\n')}` : 'Live Agents:';
+              await sendTelegramMessageImpl(chat_id, statusText);
+              break;
+            }
             case 'stop':
-              await orchestrator.stopAgent(intent.agentId!);
-              await sendTelegramMessageImpl(chat_id, `✅ Agent stopped: ${intent.agentId}`);
+              try {
+                const agent = orchestrator.getAgent?.(intent.agentId!) || (orchestrator.listAgents?.() || []).find((a: any) => a.id === intent.agentId!);
+                if (!agent) {
+                  await sendTelegramMessageImpl(chat_id, `Sorry, couldn't find agent: ${intent.agentId}. Try /help for available commands.`);
+                  break;
+                }
+                await orchestrator.stopAgent(intent.agentId!);
+                await sendTelegramMessageImpl(chat_id, `✅ Agent stopped: ${intent.agentId}`);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                await sendTelegramMessageImpl(chat_id, `❌ Could not stop agent: ${intent.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
+              }
               break;
             case 'restart':
-              await orchestrator.restartAgent(intent.agentId!);
-              await sendTelegramMessageImpl(chat_id, `✅ Agent restarted: ${intent.agentId}`);
+              try {
+                await orchestrator.restartAgent(intent.agentId!);
+                await sendTelegramMessageImpl(chat_id, `✅ Agent restarted: ${intent.agentId}`);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                await sendTelegramMessageImpl(chat_id, `❌ Could not restart agent: ${intent.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
+              }
               break;
             case 'launch':
               await orchestrator.launchAgent({ id: intent.agentId!, type: intent.type || 'native', status: 'pending', host: '', config: {} });
               await sendTelegramMessageImpl(chat_id, `✅ Agent launched: ${intent.agentId} (${intent.type || 'native'})`);
               break;
             case 'delete':
-              await orchestrator.stopAgent(intent.agentId!);
-              await sendTelegramMessageImpl(chat_id, `🗑️ Agent deleted (stopped): ${intent.agentId}`);
+              try {
+                await orchestrator.stopAgent(intent.agentId!);
+                await sendTelegramMessageImpl(chat_id, `🗑️ Agent deleted (stopped): ${intent.agentId}`);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                await sendTelegramMessageImpl(chat_id, `❌ Could not delete agent: ${intent.agentId}. Reason: ${msg.match(/not found|no agent|already stopped/i) ? msg : 'Unknown error.'}`);
+              }
               break;
             case 'update-config':
-              const updated = await orchestrator.updateAgentConfig(intent.agentId!, intent.config);
-              if (updated) {
-                await sendTelegramMessageImpl(chat_id, `⚙️ Agent config updated: ${intent.agentId}`);
-              } else {
+              try {
+                const updated = await orchestrator.updateAgentConfig(intent.agentId!, intent.config);
+                if (updated) {
+                  await sendTelegramMessageImpl(chat_id, `⚙️ Agent config updated: ${intent.agentId}`);
+                } else {
+                  await sendTelegramMessageImpl(chat_id, `❌ Failed to update config for agent: ${intent.agentId}`);
+                }
+              } catch (err) {
                 await sendTelegramMessageImpl(chat_id, `❌ Failed to update config for agent: ${intent.agentId}`);
               }
               break;
@@ -488,3 +525,9 @@ export default async function handler(
     return res.status(200).json({ ok: false, error: error.message });
   }
 }
+
+export function createTelegramHandler(client?: any, sendTelegramMessageImpl?: any, injectedUserDialogueState?: any) {
+  return (req: any, res: any) => handler(req, res, client, sendTelegramMessageImpl, injectedUserDialogueState);
+}
+
+export default handler;

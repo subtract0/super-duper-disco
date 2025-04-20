@@ -118,7 +118,46 @@ This document consolidates best practices, patterns, and insights gathered while
 - Reset mocks in `afterEach`/`beforeEach`: `jest.resetAllMocks()`.
 - Do not mock database in dev/prod code, only in tests.
 
-## Error Handling and Edge Cases
+## Current Test Status and Debugging Notes (2025-04-20)
+
+### Summary: Which Tests Pass, Which Fail, and Why
+
+#### Passing Tests
+- **Unit tests for pure functions and protocol adapters** (e.g., `tests/protocols/a2aAdapter.test.ts`, `tests/protocols/modelContextAdapter.test.ts`) pass reliably. These cover envelope building/parsing and model context validation.
+- **AgentManager modular orchestration tests** (`tests/orchestration/agentManager.modular.test.ts`) pass, confirming agent deployment and type assignment logic works in isolation.
+- **API endpoint tests for agent health, agent listing, and host management** (e.g., `pages/api/agent-health.test.ts`, `pages/api/agents/index.test.ts`, `pages/api/hosts/index.test.ts`) mostly pass, verifying basic CRUD and health reporting logic.
+
+#### Failing/Flaky Tests
+- **Telegram Orchestration Integration Test** (`src/orchestration/__tests__/telegramOrchestration.integration.test.ts`)
+  - The `/msg` test fails: it expects a message sent between agents to be persisted and retrievable from the mock MCP memory, but the assertion does not find the expected content.
+  - Root cause is likely one of:
+    - The orchestrator is not calling the MCP mock as expected (possible dependency injection or test setup issue).
+    - The message is not being persisted at all, or the test is not correctly resetting/injecting the mock.
+    - The test runner (Jest/terminal) is suppressing output, making debugging difficult.
+- **Some document upload and conversational config update tests** (in `test/upload.spec.ts` and related Telegram handler tests) may fail due to fallback error messages being returned instead of specific error prompts (e.g., for malformed JSON or missing files).
+
+### Recommendations: Files to Check for Debugging
+- **For Telegram Orchestration Integration Failures:**
+  - `src/orchestration/__tests__/telegramOrchestration.integration.test.ts` (test logic and MCP mock setup)
+  - `src/orchestration/agentOrchestrator.ts` (message persistence logic)
+  - `src/orchestration/agentManager.ts` (agent lifecycle and in-memory state)
+  - `src/orchestration/agentMessageMemory.ts` (MCP memory mock implementation)
+  - `pages/api/telegram.ts` (Telegram handler logic and command parsing)
+- **For API/Agent/Health/Logs Issues:**
+  - `pages/api/agents/[id].ts`, `pages/api/agents/index.ts`, `pages/api/agents/[id]logs.ts` (API handlers)
+  - `src/orchestration/orchestratorSingleton.ts` (singleton orchestrator wiring)
+- **For E2E/UI/Component Failures:**
+  - `components/AgentRegistry.test.tsx`, `components/AuthForm.test.tsx` (UI logic)
+  - `test/helpers.ts` (shared mocks and utilities)
+
+### Next Steps
+- Run failing integration tests in an alternate terminal or with increased Jest verbosity to surface suppressed logs/errors.
+- Double-check mock injection and test setup in integration tests to ensure the orchestrator uses the test MCP memory.
+- For persistent failures, add minimal standalone tests for MCP persistence and agent message passing to isolate the issue.
+
+---
+
+
 
 - Write tests for failed network calls, invalid JSON, missing parameters.
 - Ensure API handlers return consistent shapes: `{ ok: boolean, error?: string }`.

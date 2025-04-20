@@ -1,6 +1,6 @@
 // src/orchestration/agentManager.ts
 
-export type AgentStatus = 'running' | 'stopped' | 'error';
+export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered';
 
 export interface AgentInfo {
   id: string;
@@ -13,75 +13,22 @@ export interface AgentInfo {
   lastHeartbeat?: number; // timestamp in ms
   lastActivity?: number; // timestamp in ms
   crashCount?: number;
+  // Deployment fields
+  deploymentStatus?: 'pending' | 'deploying' | 'deployed' | 'failed';
+  deploymentUrl?: string | null;
+  lastDeploymentError?: string | null;
 }
 
-export class BaseAgent {
-  id: string;
-  name: string;
-  status: AgentStatus = 'stopped';
-  logs: string[] = [];
-  interval: NodeJS.Timeout | null = null;
-
-  constructor(id: string, name: string) {
-    this.id = id;
-    this.name = name;
-  }
-
-  start() {
-    this.status = 'running';
-    this.logs.push(`[${new Date().toISOString()}] Agent started`);
-    this.updateHeartbeat();
-    this.interval = setInterval(() => {
-      this.logs.push(`[${new Date().toISOString()}] Agent heartbeat`);
-      this.updateHeartbeat();
-    }, 5000);
-  }
-
-  updateHeartbeat() {
-    (this as any).lastHeartbeat = Date.now();
-  }
-
-  updateActivity() {
-    (this as any).lastActivity = Date.now();
-  }
-
-  stop() {
-    this.status = 'stopped';
-    this.logs.push(`[${new Date().toISOString()}] Agent stopped`);
-    if (this.interval) clearInterval(this.interval);
-  }
-
-  getHealth() {
-    return this.status;
-  }
-
-  getLogs() {
-    return this.logs.slice(-20);
-  }
-}
+// Use BaseAgent from agents/BaseAgent
+import { BaseAgent } from './agents/BaseAgent';
 
 /**
  * Factory function for modular agent instantiation.
  * Easily extendable for new agent types.
  */
-import LangChainAgent from './langchainAgent';
-import { persistentMemory } from './persistentMemory';
+import { createAgent } from './agents/factory';
 
-function createAgent(id: string, name: string, type: string, config: any): BaseAgent {
-  switch (type) {
-    case 'langchain': {
-      return new LangChainAgent(id, config.openAIApiKey || process.env.OPENAI_API_KEY);
-    }
-    case 'autogen': {
-      const { AutoGenAgent } = require('./autoGenAgent');
-      return new AutoGenAgent(id);
-    }
-    default:
-      return new BaseAgent(id, name);
-  }
-}
-
-class AgentManager {
+export class AgentManager {
   agents: Map<string, AgentInfo> = new Map();
 
   /**
@@ -94,84 +41,144 @@ class AgentManager {
       const existing = this.agents.get(id);
       if (existing && existing.instance && typeof existing.instance.stop === 'function') {
         existing.instance.stop();
+        // Do NOT delete from map; keep agent for lifecycle tracking
       }
-      this.agents.delete(id);
     }
-    // Try to load persistent memory for this agent (by id and type)
-    let hydratedConfig = { ...config };
-    try {
-      const memories = await persistentMemory.query({ type: 'agent_state' });
-      const agentMemory = memories.find(m => m.value?.content?.id === id || m.value?.content?.name === name);
-      if (agentMemory && agentMemory.value?.content) {
-        hydratedConfig = { ...hydratedConfig, ...agentMemory.value.content.config };
-      }
-    } catch (err) {
-      // If persistent memory fails, continue with provided config
-    }
-    const agent = createAgent(id, name, type, hydratedConfig);
+    // No persistent memory hydration in new design
+    const agent = createAgent(id, name, type, config);
     agent.start();
     const now = Date.now();
+    // Set status to 'running' after start
+    agent.status = 'running';
+    // Listen for heartbeat events to update lastHeartbeat
+    const heartbeatListener = (hb: { ts: number }) => {
+      const info = this.agents.get(id);
+      if (info) {
+        info.lastHeartbeat = hb.ts;
+        info.status = 'running';
+      }
+    };
+    agent.on('heartbeat', heartbeatListener);
+    // Store listener for later removal
+    (agent as any)._heartbeatListener = heartbeatListener;
+    // Set health to healthy
+    try {
+      const { agentHealthStore } = require('./agentHealth');
+      agentHealthStore.setHealth(id, 'healthy');
+    } catch (e) {
+      // ignore if agentHealthStore is not available
+    }
     this.agents.set(id, {
       id,
       name,
-      status: agent.status,
-      logs: agent.logs,
+      status: 'running',
+      logs: typeof agent.getLogs === 'function' ? agent.getLogs() : [],
       instance: agent,
       type,
-      config: hydratedConfig,
+      config,
       lastHeartbeat: now,
       lastActivity: now,
       crashCount: 0,
+      deploymentStatus: 'deployed', // Default to deployed for now (simulate success)
+      deploymentUrl: null,
+      lastDeploymentError: null,
     });
+    // Keep logs in sync with instance
+    this.syncAgentLogs(id);
+    // Debug log
+    if (!this.agents.has(id)) {
+      console.error(`[AgentManager] deployAgent: Agent ${id} not in map after deploy!`);
+    } else {
+      console.log(`[AgentManager] deployAgent: Agent ${id} deployed with status`, this.agents.get(id)?.status);
+    }
   }
+
+  // Deployment status helpers
+  setDeploymentStatus(id: string, status: 'pending' | 'deploying' | 'deployed' | 'failed') {
+    const info = this.agents.get(id);
+    if (info) info.deploymentStatus = status;
+  }
+  setDeploymentUrl(id: string, url: string | null) {
+    const info = this.agents.get(id);
+    if (info) info.deploymentUrl = url;
+  }
+  setDeploymentError(id: string, error: string | null) {
+    const info = this.agents.get(id);
+    if (info) info.lastDeploymentError = error;
+  }
+
+  // Ensure AgentInfo.logs stays in sync with instance.getLogs()
+  syncAgentLogs(id: string) {
+    const info = this.agents.get(id);
+    if (info && info.instance && typeof info.instance.getLogs === 'function') {
+      info.logs = info.instance.getLogs();
+    }
+  }
+
+  setAgentLogs(id: string, logs: string[]) {
+    const info = this.agents.get(id);
+    if (info && info.instance) {
+      if (typeof info.instance.setLogs === 'function') {
+        info.instance.setLogs(logs);
+      } else if ('_logs' in info.instance) {
+        info.instance._logs = logs;
+      } else if ('logs' in info.instance) {
+        info.instance.logs = logs;
+      }
+      info.logs = logs;
+      // Ensure logs are synced after setting
+      if (typeof this.syncAgentLogs === 'function') {
+        this.syncAgentLogs(id);
+      }
+    }
+  }
+
 
   async stopAgent(id: string) {
     const info = this.agents.get(id);
     if (info && info.instance) {
+      // Remove heartbeat listener to prevent leaks
+      if ((info.instance as any)._heartbeatListener) {
+        info.instance.off('heartbeat', (info.instance as any)._heartbeatListener);
+        delete (info.instance as any)._heartbeatListener;
+      }
       info.instance.stop();
+      this.syncAgentLogs(id);
       info.status = 'stopped';
-      // Set health to 'crashed' to trigger orchestrator auto-recovery
+      info.lastActivity = Date.now();
+      // Set health to crashed
       try {
         const { agentHealthStore } = require('./agentHealth');
         agentHealthStore.setHealth(id, 'crashed');
       } catch (e) {
-        // fallback: ignore if not available
+        // ignore if agentHealthStore is not available
       }
-      info.lastActivity = Date.now();
-      // Save agent state to persistent memory
-      try {
-        await persistentMemory.save({
-          type: 'agent_state',
-          content: {
-            id: info.id,
-            name: info.name,
-            type: info.type,
-            status: info.status,
-            config: info.config,
-            logs: info.logs,
-            lastHeartbeat: info.lastHeartbeat,
-            lastActivity: info.lastActivity,
-            crashCount: info.crashCount,
-            stoppedAt: Date.now(),
-          },
-          tags: ['agent', info.type, info.id],
-        });
-      } catch (err) {
-        // If persistent memory fails, continue
-      }
+      // Debug log
+      console.log(`[AgentManager] stopAgent: Agent ${id} stopped. Status is now`, info.status);
+    } else {
+      console.error(`[AgentManager] stopAgent: Agent ${id} not found in map!`);
     }
   }
+
+  // Alias for compatibility with tests and orchestrator code
+  stop(id: string) {
+    return this.stopAgent(id);
+  }
+
 
   getAgentHealth(id: string) {
     const info = this.agents.get(id);
     if (!info) return 'not found';
-    // Crash detection: if lastHeartbeat is too old (e.g. >15s), mark as crashed
-    const now = Date.now();
-    if (info.lastHeartbeat && now - info.lastHeartbeat > 15000 && info.status === 'running') {
+    // Detect missed heartbeat (simulate crash detection for test)
+    if (info.status === 'running' && info.lastHeartbeat && Date.now() - info.lastHeartbeat > 15000) {
       info.status = 'error';
       info.crashCount = (info.crashCount || 0) + 1;
+      return 'error';
     }
-    return info.status;
+    if (info.status === 'error') return 'error';
+    if (info.status === 'stopped') return 'stopped';
+    if (info.status === 'running') return 'running';
+    return 'stopped';
   }
 
   getAgentLastHeartbeat(id: string) {
@@ -189,25 +196,31 @@ class AgentManager {
     return info ? info.instance?.getLogs() : [];
   }
 
-  // Test helper: set logs for an agent (for integration testing)
-  setAgentLogs(id: string, logs: string[]) {
-    const info = this.agents.get(id);
-    if (info && info.instance) {
-      info.instance.logs = logs;
-    }
-  }
+
 
   listAgents() {
     return Array.from(this.agents.values());
+  }
+
+  // Alias for compatibility with tests and orchestrator code
+  list() {
+    return this.listAgents();
   }
   clearAllAgents() {
     for (const info of this.agents.values()) {
       if (info && info.instance && typeof info.instance.stop === 'function') {
         info.instance.stop();
+        // Set health to crashed
+        try {
+          const { agentHealthStore } = require('./agentHealth');
+          agentHealthStore.setHealth(info.id, 'crashed');
+        } catch (e) {
+          // ignore if agentHealthStore is not available
+        }
       }
     }
     this.agents.clear();
   }
 }
 
-export const agentManager = new AgentManager();
+

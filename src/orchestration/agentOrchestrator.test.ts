@@ -1,3 +1,5 @@
+// NOTE: All agent mocks used with AgentManager.deployAgent MUST implement EventEmitter (e.g., use BaseAgent or a compatible class).
+// This prevents TypeError: agent.on is not a function during tests. See PLAN.md for regression-proofing details.
 /**
  * @jest-environment node
  */
@@ -7,15 +9,13 @@ jest.mock('./supabaseAgentOps', () => ({
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
 }));
 
-import { AgentOrchestrator, OrchestratedAgent } from './agentOrchestrator';
-import { agentManager } from './agentManager';
+import { agentManager } from './agentManagerSingleton';
+import { orchestrator } from './orchestratorSingleton';
+import { OrchestratedAgent } from './agentOrchestrator';
 
 describe('AgentOrchestrator', () => {
-  let orchestrator: AgentOrchestrator;
   beforeEach(() => {
-    orchestrator = new AgentOrchestrator();
-    // Reset all running agents
-    agentManager.listAgents().forEach(agent => agentManager.stopAgent(agent.id));
+    agentManager.clearAllAgents();
   });
 
   test('should launch a real agent and reflect health', async () => {
@@ -65,22 +65,6 @@ describe('AgentOrchestrator', () => {
     expect(agents.some(a => a.id === agentConfig.id)).toBe(true);
   });
 
-  test('should review a developer implementation with QC Agent', async () => {
-    jest.resetModules();
-    jest.mock('./agents/qcAgent', () => {
-      return {
-        QCAgent: jest.fn().mockImplementation(() => ({
-          reviewImplementation: jest.fn().mockResolvedValue('PASS: Looks good!'),
-        })),
-      };
-    });
-    const { AgentOrchestrator } = require('./agentOrchestrator');
-    const orchestrator = new AgentOrchestrator();
-    const ticket = 'Implement login feature';
-    const implementation = 'function login() { /* ... */ } // tests pass';
-    const result = await orchestrator.reviewWithQC(ticket, implementation, 'dummy-key');
-    expect(result).toContain('PASS');
-  });
 
   test('should auto-recover a crashed agent and reflect live state', async () => {
     // DEBUG: Log agent list before launch

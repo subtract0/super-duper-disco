@@ -64,7 +64,8 @@ function parseAgentIntent(text: string): { intent: string; agentId?: string; typ
 // =====================
 // In-memory per-user dialogue state
 // =====================
-const userDialogueState: Record<string, any> = {};
+const singletonUserDialogueState: Record<string, any> = {};
+
 
 // =====================
 // Main handler
@@ -73,7 +74,8 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse,
   client: SupabaseClient = supabaseClient,
-  sendTelegramMessageImpl: typeof sendTelegramMessage = sendTelegramMessage
+  sendTelegramMessageImpl: typeof sendTelegramMessage = sendTelegramMessage,
+  injectedUserDialogueState?: Record<string, any>
 ) {
   console.log('[Telegram Handler] Incoming request:', req.method, req.url);
 
@@ -248,8 +250,9 @@ export default async function handler(
 
       // --- Natural-language intent parsing for agent management ---
       // Check for pending dialogue state
-      if (userDialogueState[user_id]) {
-        const pending = userDialogueState[user_id];
+      const dialogueState = injectedUserDialogueState || singletonUserDialogueState;
+      if (dialogueState[user_id]) {
+        const pending = dialogueState[user_id];
         // Try to fill missing info
         if (!pending.agentId && content) {
           pending.agentId = content.trim();
@@ -295,14 +298,14 @@ export default async function handler(
           } catch (err) {
             await sendTelegramMessageImpl(chat_id, `Failed to ${pending.intent.replace('-',' ')} agent: ${err instanceof Error ? err.message : err}`);
           }
-          delete userDialogueState[user_id];
+          delete dialogueState[user_id];
           return res.status(200).json({ ok: true });
         } else {
           // Still missing info
           if (!pending.agentId) {
             await sendTelegramMessageImpl(chat_id, `Which agent do you want to ${pending.intent.replace('-',' ')}? Please specify the agent ID.`);
           } else if (pending.intent === 'update-config' && !pending.config) {
-            await sendTelegramMessageImpl(chat_id, `Please provide the new config as JSON.`);
+            await sendTelegramMessageImpl(chat_id, `Please send the new config as JSON.`);
           }
           return res.status(200).json({ ok: false, error: 'Still missing info' });
         }
@@ -311,13 +314,13 @@ export default async function handler(
       const intent = parseAgentIntent(content);
       if (intent) {
         if (!intent.agentId && ['stop','restart','launch','delete','update-config'].includes(intent.intent)) {
-          userDialogueState[user_id] = intent;
+          dialogueState[user_id] = intent;
           await sendTelegramMessageImpl(chat_id, `Which agent do you want to ${intent.intent.replace('-',' ')}? Please specify the agent ID.`);
           return res.status(200).json({ ok: false, error: 'Missing agent ID' });
         }
         if (intent.intent === 'update-config' && !intent.config) {
-          userDialogueState[user_id] = intent;
-          await sendTelegramMessageImpl(chat_id, `Please provide the new config as JSON.`);
+          dialogueState[user_id] = intent;
+          await sendTelegramMessageImpl(chat_id, `Please send the new config as JSON.`);
           return res.status(200).json({ ok: false, error: 'Missing config JSON' });
         }
         try {

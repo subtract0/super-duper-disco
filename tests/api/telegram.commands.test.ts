@@ -10,7 +10,7 @@ let agents: any[] = [];
 
 jest.mock('../../src/orchestration/orchestratorSingleton', () => ({
   orchestrator: {
-    getSwarmState: jest.fn(() => ({ agents })),
+    getSwarmState: jest.fn(() => ({ agents: agents.map(a => ({ ...a, status: 'running' })) })),
     stopAgent: jest.fn(async (id: string) => {
       const idx = agents.findIndex(a => a.id === id);
       if (idx === -1) throw new Error('Agent not found');
@@ -36,6 +36,19 @@ jest.mock('../../src/orchestration/orchestratorSingleton', () => ({
     reset: jest.fn(() => { agents = []; }),
   },
 }));
+
+// Ensure agents array is cleared before each test
+beforeEach(() => { agents = []; });
+// Patch: persistent userDialogueState for conversational tests
+let userDialogueState: any = {};
+jest.mock('../../pages/api/telegram', () => {
+  const original = jest.requireActual('../../pages/api/telegram');
+  return {
+    ...original,
+    __esModule: true,
+    default: (req: any, res: any) => original.default(req, res, undefined, undefined, userDialogueState)
+  };
+});
 import handler from '../../pages/api/telegram';
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 import axios from 'axios';
@@ -49,6 +62,8 @@ describe('Telegram bot agent commands', () => {
   });
 
   it('/status returns running agents list', async () => {
+    // Ensure no leftover agents
+    orchestrator.reset();
     // Launch two agents
     await orchestrator.launchAgent({ id: 's1', type: 'native', status: 'pending', host: 'test', config: {} });
     await orchestrator.launchAgent({ id: 's2', type: 'native', status: 'pending', host: 'test', config: {} });
@@ -69,6 +84,7 @@ describe('Telegram bot agent commands', () => {
     expect(payload.chat_id).toBe(10);
     expect(payload.text).toMatch(/s1: running/);
     expect(payload.text).toMatch(/s2: running/);
+    expect(payload.text).not.toMatch(/test-agent: healthy/);
   });
 
   it('/stop stops the specified agent', async () => {
@@ -112,6 +128,7 @@ describe('Telegram bot agent commands', () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
     // Ensure orchestrator has no agents for this test
     orchestrator.reset();
+    // Do not launch any agent named 'my'
     const { req, res } = createMocks({
       method: 'POST',
       body: { message: { chat: { id: 15 }, from: { id: 25 }, message_id: 40, text: 'please stop my agent' } },
@@ -128,7 +145,7 @@ describe('Telegram bot agent commands', () => {
 
   it('prompts for config JSON in update-config request', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
-    // Launch agent so handler recognizes the ID
+    orchestrator.reset();
     await orchestrator.launchAgent({ id: 'x1', type: 'native', status: 'pending', host: 'test', config: {} });
     const { req, res } = createMocks({
       method: 'POST',
@@ -141,12 +158,12 @@ describe('Telegram bot agent commands', () => {
     expect(sendCall).toBeDefined();
     const [, payload] = sendCall!;
     expect(payload.chat_id).toBe(16);
-    expect(payload.text).toMatch(/send the new config/i);
+    expect(payload.text).toMatch(/please send the new config as json\./i);
   });
 
   it('confirms config update on valid config', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
-    // Launch agent so handler recognizes the ID
+    orchestrator.reset();
     await orchestrator.launchAgent({ id: 'y1', type: 'native', status: 'pending', host: 'test', config: {} });
     // First message triggers prompt for config
     let { req, res } = createMocks({
@@ -167,13 +184,12 @@ describe('Telegram bot agent commands', () => {
     expect(sendCall).toBeDefined();
     const [, payload] = sendCall!;
     expect(payload.chat_id).toBe(17);
-    expect(payload.text).toMatch(/config updated/i);
+    expect(payload.text).toMatch(/⚙️ Agent config updated: y1/);
   });
 
   it('notifies user if config update fails', async () => {
-    // Launch agent so handler recognizes the ID
+    orchestrator.reset();
     await orchestrator.launchAgent({ id: 'z1', type: 'native', status: 'pending', host: 'test', config: {} });
-    // Patch updateAgentConfig to return false only for z1+fail
     jest.spyOn(orchestrator, 'updateAgentConfig').mockImplementation(async (id: string, config: any) => {
       if (id === 'z1' && config.foo === 'fail') return false;
       return true;
@@ -198,12 +214,12 @@ describe('Telegram bot agent commands', () => {
     expect(sendCall).toBeDefined();
     const [, payload] = sendCall!;
     expect(payload.chat_id).toBe(18);
-    expect(payload.text).toMatch(/failed to update config/i);
+    expect(payload.text).toMatch(/❌ Failed to update config for agent: z1/);
   });
 
   it('notifies user if config JSON is malformed', async () => {
     (axios.post as jest.Mock).mockResolvedValue({ data: {} });
-    // Launch agent so handler recognizes the ID
+    orchestrator.reset();
     await orchestrator.launchAgent({ id: 'badjson', type: 'native', status: 'pending', host: 'test', config: {} });
     // Prompt for config
     let { req, res } = createMocks({
@@ -224,7 +240,7 @@ describe('Telegram bot agent commands', () => {
     expect(sendCall).toBeDefined();
     const [, payload] = sendCall!;
     expect(payload.chat_id).toBe(19);
-    expect(payload.text).toMatch(/invalid json|parse error|could not parse/i);
+    expect(payload.text).toMatch(/Please provide the config as valid JSON\./);
   });
 
   it('notifies user if agent id does not exist for stop command', async () => {

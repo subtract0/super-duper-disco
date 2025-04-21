@@ -23,9 +23,9 @@
 - A custom lint script (`.cascade-lint.js`) has been added to automate compliance checks for agent mocks in test files.
 - The agent mock compliance automation (lint script and GitHub Actions workflow) is stable and operational. The enforcement pipeline for agent mock compliance is now complete.
 - **Architectural milestone complete:** All dashboard and API endpoints now source real-time agent state, health, and logs directly from the orchestrator, AgentManager, and agentLogStore singletons. No static or duplicated records are used anywhere for live agent data.
-- Robust tests exist to guarantee this real-time compliance and prevent regressions.
+- **Test coverage milestone:** All major endpoints and workflows are covered by robust tests (unit, integration, E2E) that verify live agent state, health, and logs. Protocol compliance (A2A, MCP) is enforced and tested for all agent-to-agent messaging and persistence layers.
 - PLAN.md will be updated only as new blockers, regressions, or requirements arise.
-- Next: Monitor for regressions, improve extensibility, and review for new features or enhancements.
+- Next: Focus on extensibility, monitoring improvements, and backlog grooming for new features/enhancements. Continue to monitor for regressions.
 - Continue to ensure all agent mocks implement the EventEmitter contract (see previous blockers).
 - Keep PLAN.md updated with blockers, root causes, and solutions.
 

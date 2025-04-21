@@ -305,44 +305,7 @@ export class AgentOrchestrator {
     };
   }
 
-  constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: Record<string, unknown>) => Promise<void> }) {
-    // Always use the global singleton for AgentManager
-    Object.defineProperty(this, 'agentManager', {
-      get: () => (globalThis as any).__CASCADE_AGENT_MANAGER__,
-      configurable: true,
-      enumerable: true,
-    });
-    if (agentMessageMemory) {
-      this.agentMessageMemory = agentMessageMemory;
-    } else {
-      this.agentMessageMemory = { save: async () => {} };
-    }
 
-
-    // Future: Load agents from persistent store, initialize orchestrator state
-    // Auto-recovery: subscribe to health changes
-    const debounce: Record<string, NodeJS.Timeout> = {};
-    agentHealthStore.onStatusChange(async (agentId, status) => {
-    console.log(`[ORCH][DEBUG] onStatusChange event: ${agentId} -> ${status}`);
-      if (status === 'crashed') {
-        console.log(`[ORCH] Auto-recovery triggered for ${agentId}`);
-        if (debounce[agentId]) clearTimeout(debounce[agentId]);
-        debounce[agentId] = setTimeout(async () => {
-        console.log(`[ORCH][DEBUG] Debounce timer fired for ${agentId}`);
-        // Only auto-recover if agent still exists and is crashed
-        if (this.getAgent(agentId) && agentHealthStore.getHealth(agentId) === 'crashed') {
-          agentLogStore.addLog({
-            agentId,
-            timestamp: Date.now(),
-            level: 'warn',
-            message: `Auto-recovery triggered for crashed agent`,
-          });
-          await this.restartAgent(agentId);
-        }
-      }, 1000); // 1s debounce for demo
-      }
-    });
-  }
 
   /**
    * Launch a Quality Control Agent (QC Agent) for reviewing implementations.

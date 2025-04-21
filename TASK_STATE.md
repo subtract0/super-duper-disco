@@ -12,6 +12,7 @@
   - `TICKETS_FROM_THE_PAST.md` archives completed tickets and learnings.
 - Agent Manager and Orchestrator support live, in-memory agent lifecycle management, health, and logs.
 - All core protocols (A2A, Model Context Protocol) are implemented and referenced in architecture.
+- Node.js v23.11.0 is required.
 - All test suites (Jest, component, integration) are passing and up-to-date.
 - No open `task*`, `todo*`, or legacy task files remain in the repo.
 - All major documentation files (`README.md`, `DOC.md`, `TESTING.md`) are current and cross-referenced.

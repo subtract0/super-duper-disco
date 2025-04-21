@@ -10,6 +10,9 @@
 
 Enable users to describe a feature to a Telegram bot, which triggers a multi-agent system to build, test, review, and deploy agents on demand, with oversight and quality control, all orchestrated and deployed remotely/serverless.
 
+**Node.js Version Requirement:**
+- Node.js v23.11.0 is required and active for all development and deployment.
+
 **Autonomous-First Principle:**
 All architectural decisions and protocols are chosen to maximize agent autonomy, minimize human prompts, and ensure robust self-recovery and error handling. Agents are expected to operate independently, escalate only when protocol requires, and always update persistent memory with key context and learnings.
 

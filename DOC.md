@@ -64,6 +64,40 @@ HandwerkerPro is a modern, production-ready Next.js application for managing cra
 - **PowerShell scripts**: For quickstart and setup tasks (`quickstart.ps1`).
 
 ### Documentation
+
+## knowledge/ Directory (Agent Swarm Knowledge Base)
+
+The `knowledge/` directory is the central hub for protocols, project vision, task state, history, and all cross-referenced knowledge for agent swarms and LLMs.
+
+### Structure
+- `protocols/`: Operational protocols, escalation paths, agent guidelines (with YAML metadata)
+- `vision/`: Project vision, architecture, and goals
+- `tasks/`: Current and past tasks, status, owners, dependencies
+- `history/`: Logs, tickets, historic plans, and snapshots
+- `index.yaml`: Knowledge graph/index for fast bootstrapping and cross-referencing
+- `ingest_knowledge.js`: Script for automated knowledge ingestion
+
+### How index.yaml Works
+- Contains lists of all knowledge files, with IDs, file paths, titles, tags, and last updated dates
+- Defines relationships between knowledge objects (e.g., "protocol X governs task Y")
+- YAML format for easy parsing by both humans and agents
+
+### Automated Ingestion
+- `ingest_knowledge.js` reads `index.yaml` and loads all referenced files into a structured context object
+- Extracts YAML frontmatter (metadata) and body (content) from each file
+- Enables any agent/LLM to bootstrap with full project context on startup
+
+### Extending the Knowledge Base
+- Add new files to the appropriate subdirectory
+- Add an entry to `index.yaml` with metadata
+- Use YAML frontmatter for all new knowledge files
+- Cross-reference related files using unique IDs and the `relationships` section in `index.yaml`
+
+### Best Practices
+- Keep metadata up to date (especially `updated` field)
+- Use tags and clear titles
+- Link related files via IDs, not just file paths
+- Periodically snapshot logs/history for reproducibility
 - **Markdown docs**: `DOC.md` and inline documentation throughout the codebase.
 
 ---

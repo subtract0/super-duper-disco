@@ -22,6 +22,22 @@ A Next.js-based personal website with Telegram, Supabase, and OpenAI (GPT-4.1, W
 - Whisper API for voice transcription
 - TypeScript, ESLint, Jest, Tailwind CSS
 
+## Environment Setup & Test Requirements
+
+To run all features and pass all tests, you must:
+
+- Use **Node.js v23.11.0** (required). Use [nvm-windows](https://github.com/coreybutler/nvm-windows) or another version manager to ensure you are running this version. Run `node --version` to verify.
+- Create a `.env.local` file in the project root with the following variables:
+  - `OPENAI_API_KEY=your-real-openai-key`
+  - `NEXT_PUBLIC_SUPABASE_URL=your-supabase-url`
+  - `NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key`
+  - `TELEGRAM_BOT_TOKEN=your-telegram-bot-token`
+  - `WHISPER_API_KEY=your-whisper-key`
+- Ensure your Supabase/Postgres database includes the table `public.agent_deployments` (see migrations or schema.sql if available).
+- For agent log/health endpoints, ensure agents are running and the DB is seeded as expected.
+- See `PLAN.md` for the latest blockers, required setup, and test status.
+
+
 ## Security
 
 - Environment variables are used for all sensitive credentials (Supabase, OpenAI, Telegram, Whisper).

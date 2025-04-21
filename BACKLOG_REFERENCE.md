@@ -14,6 +14,10 @@
 ---
 
 
+## Environment Requirement
+
+- Node.js v23.11.0 is required and active.
+
 ## How to Use This Backlog (For Autonomous Agents)
 
 - Agents may autonomously select any backlog item marked as `[autonomous-ready]` for execution, unless protocol or ticket states otherwise.

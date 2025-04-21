@@ -8,7 +8,7 @@ export interface TelegramFile {
 }
 
 export interface Intent {
-  kind: 'status' | 'stop' | 'restart' | 'launch' | 'delete' | 'update-config';
+  kind: 'status' | 'stop' | 'restart' | 'launch' | 'delete' | 'update-config' | 'help';
   agentId?: string;
   launchType?: string;
   config?: Record<string, unknown>;

@@ -2,6 +2,28 @@
 
 ---
 
+## [2025-04-21T19:04+02:00] Plateau Summary: Telegram Bot /help Command Support
+
+### Problem
+- Telegram bot did not recognize the /help command and responded with an error message, confusing users.
+
+### Solution
+- Added 'help' to the intent parser, types, and controller logic.
+- The bot now responds to /help (and help) with a list of available commands and their usage:
+  - /status — show live agents
+  - /stop <id>
+  - /restart <id>
+  - /launch <id> [as <type>]
+  - /delete <id>
+  - /update config for agent <id> to {...}
+  - /help — show this help message
+
+### Resolution & Next Steps
+- Users can now get guidance on available commands directly from the bot.
+- Continue to monitor for user experience improvements and update PLAN.md as further UX enhancements are made.
+
+---
+
 ## [2025-04-21T18:43+02:00] Plateau Summary: Migration to SWC, Removal of Babel
 
 ### Problem

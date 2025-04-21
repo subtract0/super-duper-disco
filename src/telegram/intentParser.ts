@@ -4,6 +4,7 @@ export function parse(text: string): Intent | null {
   const t = text.trim().toLowerCase();
 
   if (/^\/?status\b/.test(t)) return { kind: 'status' };
+  if (/^\/?help\b/.test(t)) return { kind: 'help' };
 
   const mStop = t.match(/^\/?stop(?:\s+(?:my|the))?\s*agent?\s*(\S+)?/);
   if (mStop) return { kind: 'stop', agentId: mStop[1] };

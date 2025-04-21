@@ -1,4 +1,5 @@
 // Dedicated integration test for QCAgent using dependency injection to avoid real SDK/fetch issues
+import 'openai/shims/node';
 import { QCAgent } from './qcAgent';
 import { EventEmitter } from 'events';
 

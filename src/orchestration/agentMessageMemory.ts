@@ -1,4 +1,4 @@
-import { supabase } from '../../utils/supabaseClient';
+import { supabase } from '../utils/supabaseClient';
 import { supabaseServer } from '../../utils/supabaseServerClient';
 import { buildModelContext, validateModelContext, ModelContextObject } from '../protocols/modelContextAdapter';
 import { buildMCPEnvelope, parseMCPEnvelope, MCPEnvelope } from '../protocols/mcpAdapter';
@@ -137,7 +137,7 @@ const parsed = (data || []).map((row: unknown, idx: number) => {
       })
       .map((env: { body: unknown }) => env.body);
     // [AgentMessageMemory.fetchRecent] Returning parsed array (debug log suppressed)
-    return parsed;
+    return parsed as ModelContextObject[];
   }
 }
 

@@ -10,10 +10,18 @@ if (supabaseServiceRoleKey) {
   console.error('[supabaseServerClient] Service role key NOT loaded!');
 }
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
-  throw new Error('[supabaseServerClient] SUPABASE_SERVICE_ROLE_KEY and URL are required for server-side Supabase client');
-}
+let supabaseServer: ReturnType<typeof createClient>;
 
-const supabaseServer = createClient(supabaseUrl, supabaseServiceRoleKey);
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  if (process.env.NODE_ENV === 'test') {
+    // Allow dummy values for test environment
+    console.warn('[supabaseServerClient] Using dummy Supabase credentials for test');
+    supabaseServer = createClient('http://dummy.local', 'dummy');
+  } else {
+    throw new Error('[supabaseServerClient] SUPABASE_SERVICE_ROLE_KEY and URL are required for server-side Supabase client');
+  }
+} else {
+  supabaseServer = createClient(supabaseUrl, supabaseServiceRoleKey);
+}
 
 export { supabaseServer };

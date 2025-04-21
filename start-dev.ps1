@@ -49,17 +49,36 @@ Write-Host "[Cascade] Waiting for $maxWaitSeconds seconds to allow Next.js to st
 Start-Sleep -Seconds $maxWaitSeconds
 
 Write-Host "[Cascade] Starting ngrok tunnel (ngrok.exe http 3000)..."
-if (!(Test-Path ".\ngrok.exe")) {
+$ngrokPath = Resolve-Path -Path ".\ngrok.exe" -ErrorAction SilentlyContinue
+if (-not $ngrokPath) {
     Write-Host "[Cascade] ERROR: ngrok.exe not found in project root. Please download it from https://ngrok.com/download and place it here."
     Stop-Transcript | Out-Null
     exit 1
 }
+# Check for existing ngrok tunnel
+$ngrokApiUrl = 'http://127.0.0.1:4040/api/tunnels'
+$ngrokTunnelExists = $false
 try {
-    $ngrokProc = Start-Process -FilePath ".\ngrok.exe" -ArgumentList "http 3000" -WorkingDirectory "." -PassThru
-    $pids += @{ Name = "ngrok"; PID = $ngrokProc.Id }
-    Write-Host "[Cascade] ngrok started (PID=$($ngrokProc.Id))."
+    $existingNgrok = Invoke-RestMethod -Uri $ngrokApiUrl -Method Get -ErrorAction Stop
+    if ($existingNgrok.tunnels.Count -gt 0) {
+        $ngrokTunnelExists = $true
+        Write-Host "[Cascade] Existing ngrok tunnel found. Reusing it."
+    }
 } catch {
-    Write-Host "[Cascade] ERROR: Failed to start ngrok.exe."
+    $ngrokTunnelExists = $false
+}
+if (-not $ngrokTunnelExists) {
+    try {
+        $ngrokProc = Start-Process -FilePath $ngrokPath -ArgumentList "http 3000" -WorkingDirectory "." -PassThru
+        $pids += @{ Name = "ngrok"; PID = $ngrokProc.Id }
+        Write-Host "[Cascade] ngrok started (PID=$($ngrokProc.Id))."
+    } catch {
+        Write-Host "[Cascade] ERROR: Failed to start ngrok.exe."
+        Stop-Transcript | Out-Null
+        exit 1
+    }
+} else {
+    Write-Host "[Cascade] Skipping ngrok start since tunnel exists."
 }
 # Save PIDs
 $pids | ConvertTo-Json | Set-Content -Path $pidFile
@@ -122,24 +141,32 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 $BotToken = $envMap['TELEGRAM_BOT_TOKEN']
-Write-Host "DEBUG: BotToken = $BotToken"
+# Write-Host "DEBUG: BotToken = $BotToken"  # Uncomment for troubleshooting
 $webhookUrl = "$publicUrl/api/telegram"
 $setWebhookUrl = "https://api.telegram.org/bot$BotToken/setWebhook"
 Write-Host "[Cascade] Setting Telegram webhook to: $webhookUrl"
-Write-Host "DEBUG: setWebhookUrl = $setWebhookUrl"
-Write-Host "DEBUG: BotToken = $BotToken"
+# Write-Host "DEBUG: setWebhookUrl = $setWebhookUrl"  # Uncomment for troubleshooting
+# Write-Host "DEBUG: BotToken = $BotToken"  # Uncomment for troubleshooting
 try {
     $response = Invoke-RestMethod -Uri $setWebhookUrl -Method Post -Body @{ url = $webhookUrl }
     if ($response.ok -eq $true) {
         Write-Host "[Cascade] Telegram webhook set successfully!"
     } else {
         Write-Host "[Cascade] ERROR: Telegram API did not confirm webhook: $($response | ConvertTo-Json)"
+        Stop-Transcript | Out-Null
         exit 1
     }
 } catch {
     Write-Host "[Cascade] ERROR: Failed to set Telegram webhook via API."
     Write-Host $_
+    Stop-Transcript | Out-Null
     exit 1
 }
 Write-Host "[Cascade] All services started and Telegram webhook set. You can now chat with your bot."
+Write-Host ""
+Write-Host "[Cascade] --- SUMMARY ---"
+Write-Host "Next.js dev server: http://localhost:3000"
+Write-Host "ngrok public URL: $publicUrl"
+Write-Host "Telegram webhook: $webhookUrl"
+Write-Host "To stop all started processes, re-run this script or delete .cascade-pids.json and kill lingering node/ngrok processes."
 Stop-Transcript | Out-Null

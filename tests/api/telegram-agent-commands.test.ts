@@ -1,3 +1,4 @@
+import 'openai/shims/node';
 import { createMocks } from 'node-mocks-http';
 import { EventEmitter } from 'events';
 
@@ -30,6 +31,21 @@ jest.mock('../../src/orchestration/orchestratorSingleton', () => ({
 }));
 
 // --- Agent Control Commands Test Suite ---
+
+function expectStringMatch(actual: any, pattern: RegExp|string) {
+  if (typeof actual !== 'string') {
+    // Print all calls for easier debugging
+    // eslint-disable-next-line no-console
+    console.error('[TEST ERROR][expectStringMatch] actual is not string:', actual);
+    if (typeof global !== 'undefined' && global.console && global.console.trace) {
+      global.console.trace('Call stack for expectStringMatch failure');
+    }
+    throw new Error('Expected a string for Telegram message, got: ' + typeof actual + '. See console for details.');
+    return;
+  }
+  expect(actual).toMatch(pattern);
+}
+
 describe('Telegram API Handler - agent control commands', () => {
   const chat_id = 123;
   const agentId = 's1';
@@ -52,8 +68,7 @@ describe('Telegram API Handler - agent control commands', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][0]).toBe(chat_id);
-    expect(calls[0][1]).toMatch(/Live Agents:\ns1: running/);
+    expect(calls[0][0]).toMatchObject({ chat_id, text: expect.stringMatching(/Live Agents:\ns1: running/) });
   } catch (err) {
     console.error('[TEST ERROR][agent-control:/status]', err);
     throw err;
@@ -69,7 +84,7 @@ describe('Telegram API Handler - agent control commands', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][1]).toMatch(/Agent stopped: s1/);
+    expectStringMatch(calls[0][0].text, /Agent stopped: s1/);
   });
   it('handles /restart <id> command', async () => {
     const { req, res } = createMocks({
@@ -81,8 +96,8 @@ describe('Telegram API Handler - agent control commands', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][1]).toMatch(/restarted/i);
-    expect(calls[0][1]).toMatch(agentId);
+    expectStringMatch(calls[0][0].text, /restarted/i);
+    expectStringMatch(calls[0][0].text, agentId);
   });
 });
 
@@ -111,7 +126,7 @@ describe('Telegram API Handler - conversational and fallback flows', () => {
       expect(res._getStatusCode()).toBe(200);
       const calls = mockSendTelegramMessage.mock.calls;
       expect(calls.length).toBe(1);
-      expect(calls[0][1]).toMatch(/Live Agents:|Sorry, I couldn't understand|try \/help/i);
+      expectStringMatch(calls[0][0].text, /Live Agents:|Sorry, I couldn't understand|try \/help/i);
     }
   });
 
@@ -125,7 +140,7 @@ describe('Telegram API Handler - conversational and fallback flows', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][1]).toMatch(/not found|couldn't find|unknown agent|try \/help/i);
+    expectStringMatch(calls[0][0].text, /not found|couldn't find|unknown agent|try \/help/i);
   });
 
   it('responds with clarification/help for malformed config update', async () => {
@@ -138,7 +153,7 @@ describe('Telegram API Handler - conversational and fallback flows', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][1]).toMatch(/Please send the new config as JSON|Invalid JSON|couldn't understand|try \/help|clarify/i);
+    expectStringMatch(calls[0][0].text, /Please send the new config as JSON|Invalid JSON|couldn't understand|try \/help|clarify/i);
   });
 
   it('responds with clarification prompt for multi-turn/ambiguous agent action', async () => {
@@ -151,7 +166,7 @@ describe('Telegram API Handler - conversational and fallback flows', () => {
     expect(res._getStatusCode()).toBe(200);
     const calls = mockSendTelegramMessage.mock.calls;
     expect(calls.length).toBe(1);
-    expect(calls[0][1]).toMatch(/Invalid JSON: Please provide the config as valid JSON|which agent|specify|clarify|try \/help/i);
+    expectStringMatch(calls[0][0].text, /Invalid JSON: Please provide the config as valid JSON|which agent|specify|clarify|try \/help/i);
   });
 });
 

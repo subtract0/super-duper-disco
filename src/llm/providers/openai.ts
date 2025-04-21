@@ -1,5 +1,6 @@
 /* OpenAI provider – uses @langchain/openai */
 
+import 'openai/shims/node';
 import { ChatOpenAI } from '@langchain/openai';
 import { LLM, LLMMessage } from '../types';
 

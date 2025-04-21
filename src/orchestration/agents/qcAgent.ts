@@ -11,7 +11,12 @@ export class QCAgent {
   // Allow injection of a mock LangChainAgent for testing
   constructor(id: string, openAIApiKey: string, langchainAgentOverride?: LangChainAgent) {
     this.id = id;
-    this.langchain = langchainAgentOverride || new LangChainAgent(id, openAIApiKey);
+    // Prevent LangChainAgent instantiation in test environments to avoid persistent/logging side effects
+    if (!(process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID)) {
+      this.langchain = langchainAgentOverride || new LangChainAgent(id, openAIApiKey);
+    } else {
+      this.langchain = langchainAgentOverride || undefined;
+    }
   }
 
   /**

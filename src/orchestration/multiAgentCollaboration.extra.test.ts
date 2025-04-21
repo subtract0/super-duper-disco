@@ -3,6 +3,7 @@
 /**
  * Additional multi-agent protocol edge case and error handling tests
  */
+import 'openai/shims/node';
 import { AgentOrchestrator } from './agentOrchestrator';
 import { agentManager } from './agentManagerSingleton';
 import { parseA2AEnvelope } from '../protocols/a2aAdapter';

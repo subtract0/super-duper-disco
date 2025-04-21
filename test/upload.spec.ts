@@ -1,3 +1,4 @@
+import 'openai/shims/node';
 import {
   CHAT_ID,
   setTestEnv, resetTestEnv,

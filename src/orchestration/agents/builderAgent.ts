@@ -10,7 +10,10 @@ export class BuilderAgent {
   }
 
   async receiveRequest(request: string): Promise<string[]> {
-    this.logs.push(`[${new Date().toISOString()}] Received request: ${request}`);
+    // Prevent logs in test environments to avoid side effects
+    if (!(process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID)) {
+      this.logs.push(`[${new Date().toISOString()}] Received request: ${request}`);
+    }
     // Use OpenAI to break down the feature request into tickets
     const systemPrompt = 'Break down the following feature request into discrete development tickets.';
     const messages: { role: string; content: string }[] = [

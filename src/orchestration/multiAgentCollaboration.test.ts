@@ -14,6 +14,7 @@
  *   Orchestrator persists message as MCP envelope for traceability
  *   Agent B can process message and optionally reply
  */
+import 'openai/shims/node';
 import { AgentOrchestrator } from './agentOrchestrator';
 import { agentManager } from './agentManagerSingleton';
 import { parseA2AEnvelope } from '../protocols/a2aAdapter';

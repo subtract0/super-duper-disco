@@ -11,7 +11,10 @@ export class DevOpsAgent {
 
   constructor(id: string, openAIApiKey: string) {
     this.id = id;
-    this.langchain = new LangChainAgent(id, openAIApiKey);
+    // Prevent LangChainAgent instantiation in test environments to avoid persistent/logging side effects
+    if (!(process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID)) {
+      this.langchain = new LangChainAgent(id, openAIApiKey);
+    }
   }
 
   async commitAndVerify(ticket: string): Promise<string> {

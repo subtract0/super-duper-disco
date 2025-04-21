@@ -98,6 +98,46 @@ if (typeof process !== 'undefined' && process.env && process.env.SLACK_WEBHOOK_U
 }
 
 export class AgentOrchestrator {
+  public readonly instanceId: string;
+  constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: Record<string, unknown>) => Promise<void> }) {
+    this.instanceId = `${Date.now()}-${Math.floor(Math.random()*1e9)}`;
+    // Always use the global singleton for AgentManager
+    Object.defineProperty(this, 'agentManager', {
+      get: () => (globalThis as any).__CASCADE_AGENT_MANAGER__,
+      configurable: true,
+      enumerable: true,
+    });
+    if (agentMessageMemory) {
+      this.agentMessageMemory = agentMessageMemory;
+    } else {
+      this.agentMessageMemory = { save: async () => {} };
+    }
+
+    // Future: Load agents from persistent store, initialize orchestrator state
+    // Auto-recovery: subscribe to health changes
+    const debounce: Record<string, NodeJS.Timeout> = {};
+    agentHealthStore.onStatusChange(async (agentId, status) => {
+      console.log(`[ORCH][DEBUG] onStatusChange event: ${agentId} -> ${status}`);
+      if (status === 'crashed') {
+        console.log(`[ORCH] Auto-recovery triggered for ${agentId}`);
+        if (debounce[agentId]) clearTimeout(debounce[agentId]);
+        debounce[agentId] = setTimeout(async () => {
+          console.log(`[ORCH][DEBUG] Debounce timer fired for ${agentId}`);
+          // Only auto-recover if agent still exists and is crashed
+          if (this.getAgent(agentId) && agentHealthStore.getHealth(agentId) === 'crashed') {
+            agentLogStore.addLog({
+              agentId,
+              timestamp: Date.now(),
+              level: 'warn',
+              message: `Auto-recovery triggered for crashed agent`,
+            });
+            await this.restartAgent(agentId);
+          }
+        }, 1000); // 1s debounce for demo
+      }
+    });
+  }
+
   private agentMessageMemory: { save: (msg: Record<string, unknown>) => Promise<void> };
 
   /**
@@ -126,6 +166,17 @@ export class AgentOrchestrator {
       for (const agent of toStop) {
         await this.stopAgent(agent.id);
       }
+    }
+  }
+
+  /**
+   * Stop an agent by ID (calls AgentManager.stopAgent)
+   */
+  async stopAgent(id: string): Promise<void> {
+    if (agentManager && typeof agentManager.stopAgent === 'function') {
+      await agentManager.stopAgent(id);
+    } else {
+      throw new Error('No agentManager instance available to stop agent');
     }
   }
 
@@ -184,40 +235,41 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Send a message from one agent to another using A2A protocol envelope
+   * Send a message from one agent to another using a strict A2A protocol envelope.
+   * Ensures protocol compliance and Model Context Protocol (MCP) persistence.
    */
   async sendAgentMessage(msg: AgentMessage): Promise<void> {
-    // Wrap the message in an A2A protocol envelope
-    const envelope = buildA2AEnvelope({
+    // Build a protocol-compliant A2AEnvelope
+    const envelope: A2AEnvelope = buildA2AEnvelope({
       type: 'agent-message',
       from: msg.from,
       to: msg.to,
       body: msg.content,
-      // Optionally: threadId, signature, etc.
+      threadId: msg.threadId || `${msg.from}->${msg.to}`,
+      // Optionally: signature, timestamp, etc.
     });
+    // Add to orchestrator message bus
     this.messageBus.push(envelope);
 
-    // Persist the message as a Model Context Protocol envelope for traceability/context
-    const mcp = this.agentMessageMemory;
+    // Persist as a Model Context Protocol envelope in Supabase for auditability
     try {
-
-      await mcp.save({
+      await this.agentMessageMemory.save({
+        id: envelope.id,
         type: 'a2a',
         content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
         role: 'agent',
         provenance: 'a2a-protocol',
-        thread_id: `${msg.from}->${msg.to}`,
+        thread_id: envelope.threadId,
         agent_id: msg.to,
         user_id: msg.from,
         tags: ['a2a', 'protocol', 'agent-message'],
-        // Optionally add timestamp, etc.
+        created_at: new Date().toISOString(),
       });
-
     } catch (err) {
       console.error('[Orchestrator][A2A->MCP] Failed to persist A2A message to MCP:', err);
     }
+    // Protocol compliance: All agent-to-agent messages must use A2AEnvelope and be MCP-persisted.
   }
-  // TODO: Update getAgentMessages and all consumers to parse/filter A2AEnvelope
 
   /**
    * Get all messages sent to a particular agent (A2AEnvelope)
@@ -254,6 +306,12 @@ export class AgentOrchestrator {
   }
 
   constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: Record<string, unknown>) => Promise<void> }) {
+    // Always use the global singleton for AgentManager
+    Object.defineProperty(this, 'agentManager', {
+      get: () => (globalThis as any).__CASCADE_AGENT_MANAGER__,
+      configurable: true,
+      enumerable: true,
+    });
     if (agentMessageMemory) {
       this.agentMessageMemory = agentMessageMemory;
     } else {
@@ -335,83 +393,40 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Launch a new agent (stubbed; will use autogen/LangChain in future).
-   * @param agentConfig OrchestratedAgent configuration
-   * @returns The launched agent (with updated status)
+   * Launch a new agent (production: uses agentManager for lifecycle).
+   * @param agentConfig OrchestratedAgent-like config
+   * @returns OrchestratedAgent
    */
-  async launchAgent(agentConfig: OrchestratedAgent): Promise<OrchestratedAgent> {
+  async launchAgent(agentConfig: {
+    id: string;
+    type: string;
+    status?: string;
+    host?: string;
+    config?: Record<string, unknown>;
+    name?: string;
+  }): Promise<OrchestratedAgent> {
+    const { id, type, config = {}, name = id } = agentConfig;
     try {
-      await agentManager.deployAgent(agentConfig.id, agentConfig.id, agentConfig.type, agentConfig.config);
-      const logMsg = `Agent launched: ${agentConfig.id}`;
-      agentLogStore.addLog({
-        agentId: agentConfig.id,
-        timestamp: Date.now(),
-        level: 'info',
-        message: logMsg,
-      });
-      try {
-        await logAgentHealthToSupabase(agentConfig.id, 'healthy', logMsg, 'info', { event: 'launchAgent' });
-      } catch (supabaseErr) {
-        if (supabaseErr && typeof supabaseErr === 'object' && 'stack' in supabaseErr) {
-  console.error('[Orchestrator] Supabase health log error:', supabaseErr, (supabaseErr as any).stack);
-} else {
-  console.error('[Orchestrator] Supabase health log error:', supabaseErr);
-}
-      }
-      // Return the authoritative agent info from agentManager
-      const agent = agentManager.agents.get(agentConfig.id);
-      if (!agent) {
-        throw new Error(`Agent with id ${agentConfig.id} not found after launch.`);
-      }
-      return agentInfoToOrchestratedAgent(agent);
+      // Deploy agent using agentManager (ensures BaseAgent/EventEmitter compatibility)
+      await agentManager.deployAgent(id, name, type, config);
+      // Optionally set host/status if needed
+      const info = agentManager.agents.get(id);
+      if (!info) throw new Error(`[launchAgent] AgentManager did not register agent id=${id}`);
+      // Return as OrchestratedAgent
+      return agentInfoToOrchestratedAgent(info);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      if (err && typeof err === 'object' && 'stack' in err) {
-  console.error('[Orchestrator] Agent launch error:', err, (err as any).stack);
-} else {
-  console.error('[Orchestrator] Agent launch error:', err);
-}
+      // Log error for debugging
       agentLogStore.addLog({
-        agentId: agentConfig.id,
+        agentId: id,
         timestamp: Date.now(),
         level: 'error',
-        message: `Agent launch failed: ${errorMsg}`,
+        message: `[launchAgent] Failed to launch agent: ${typeof err === 'object' && err !== null && 'message' in err && typeof (err as any).message === 'string' ? (err as any).message : JSON.stringify(err)}`,
       });
-      try {
-        await logAgentHealthToSupabase(agentConfig.id, 'crashed', errorMsg, 'error', { event: 'launchAgent', error: errorMsg });
-      } catch (supabaseErr) {
-        if (supabaseErr && typeof supabaseErr === 'object' && 'stack' in supabaseErr) {
-  console.error('[Orchestrator] Supabase health log error:', supabaseErr, (supabaseErr as any).stack);
-} else {
-  console.error('[Orchestrator] Supabase health log error:', supabaseErr);
-}
-      }
-      return {
-        ...agentConfig,
-        status: 'crashed',
-        host: agentConfig.host || 'local',
-        config: agentConfig.config || {},
-      };
+      // Optionally log to console
+      // eslint-disable-next-line no-console
+      console.error('[AgentOrchestrator.launchAgent] Error:', err, (typeof err === 'object' && err !== null && 'stack' in err && typeof (err as any).stack === 'string') ? (err as any).stack : undefined);
+      throw err;
     }
-  }
-
-  /**
-   * Stop an agent (stubbed; will use orchestration APIs in future).
-   * @param agentId The agent's unique ID
-   */
-  async stopAgent(agentId: string): Promise<void> {
-    this.recoveryAttempts[agentId] = 0;
-    // Stop the real agent process
-    agentManager.stopAgent(agentId);
-    const logMsg = `Agent stopped`;
-    agentLogStore.addLog({
-      agentId,
-      timestamp: Date.now(),
-      level: 'info',
-      message: logMsg,
-    });
-    logAgentHealthToSupabase(agentId, 'crashed', logMsg, 'info', { event: 'stopAgent' });
-    agentHealthStore.setHealth(agentId, 'crashed');
   }
 
   /**
@@ -420,7 +435,12 @@ export class AgentOrchestrator {
   async restartAgent(agentId: string): Promise<'recovered' | 'recovery_failed'> {
     console.log(`[ORCH][DEBUG] restartAgent called for ${agentId}`);
     console.log(`[ORCH] restartAgent called for ${agentId}`);
-    const agent = this.getAgent(agentId);
+    let agent = this.getAgent(agentId);
+    if (!agent) {
+      // Try to hydrate from persistent
+      await (await import('./agentManager')).AgentManager.hydrateFromPersistent();
+      agent = this.getAgent(agentId);
+    }
     if (!agent) {
       console.log(`[ORCH] restartAgent: agent ${agentId} not found`);
       return 'recovery_failed';
@@ -454,13 +474,19 @@ export class AgentOrchestrator {
     // Actually restart the agent process using its last config
     try {
       // Use the last known config to re-launch the agent
-      await this.launchAgent({
-        id: agent.id,
-        type: agent.type,
-        status: 'pending',
-        host: agent.host,
-        config: agent.config || {},
-      });
+      try {
+        await this.launchAgent({
+          id: agent.id,
+          type: agent.type,
+          status: 'pending',
+          host: agent.host,
+          config: agent.config || {},
+        });
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('[restartAgent][ERROR] Failed to relaunch agent:', error, (typeof error === 'object' && error !== null && 'stack' in error && typeof (error as any).stack === 'string') ? (error as any).stack : undefined);
+        throw error;
+      }
       // Manually set agent status to 'recovered' for test visibility
       const agentInfo = agentManager.agents.get(agentId);
       if (agentInfo) {
@@ -499,13 +525,20 @@ export class AgentOrchestrator {
    * @returns The agent, or undefined if not found
    */
   getAgent(agentId: string): OrchestratedAgent | undefined {
-    // Always fetch agent info from agentManager
-    const agent = agentManager.listAgents().find((a) => typeof a === 'object' && a !== null && 'id' in a && (a as { id: string }).id === agentId);
-    // If agent.status is 'recovered', force status for returned OrchestratedAgent
-    if (agent && agent.status === 'recovered') {
-      return agentInfoToOrchestratedAgent(agent, 'recovered');
+    const allIds = Array.from(this.agentManager.agents.keys());
+    // eslint-disable-next-line no-console
+    console.log('[ORCH][DEBUG][getAgent] instanceId:', this.instanceId, 'all agent IDs:', allIds, 'looking for', agentId, 'typeof agentId:', typeof agentId);
+    for (const key of allIds) {
+      const keyHex = Buffer.from(key, 'utf8').toString('hex');
+      const idHex = Buffer.from(agentId, 'utf8').toString('hex');
+      console.log('[ORCH][DEBUG][getAgent] key:', key, 'id:', agentId, 'keyHex:', keyHex, 'idHex:', idHex, 'equal:', key === agentId, 'key.length:', key.length, 'id.length:', agentId.length);
     }
-    return agent ? agentInfoToOrchestratedAgent(agent) : undefined;
+    // Force flush (for Node.js)
+    if (process.stdout && process.stdout.write) process.stdout.write('');
+    const agentInfo = this.agentManager.agents.get(agentId);
+    console.log('[ORCH][DEBUG][getAgent] lookup result:', agentInfo);
+    if (!agentInfo) return undefined;
+    return agentInfoToOrchestratedAgent(agentInfo);
   }
 
   /**
@@ -515,7 +548,7 @@ export class AgentOrchestrator {
    */
   getHealth(agentId: string): AgentHealthStatus {
     // Prefer live agentManager status if available
-    const info = agentManager.listAgents().find(a => a.id === agentId);
+    const info = agentManager.listAgents().find((a: AgentInfo) => a.id === agentId);
     if (info && info.status === 'running') return 'healthy';
     if (info && (info.status === 'stopped' || info.status === 'error')) return 'crashed';
     return agentHealthStore.getHealth(agentId);
@@ -526,13 +559,10 @@ export class AgentOrchestrator {
    * @returns Array of OrchestratedAgent
    */
   listAgents(): OrchestratedAgent[] {
-    // Always return authoritative agent list from agentManager
-    return agentManager.listAgents().map((agent) => {
-      if (typeof agent === 'object' && agent !== null && 'status' in agent && agent.status === 'recovered') {
-        return agentInfoToOrchestratedAgent(agent as AgentInfo, 'recovered');
-      }
-      return agentInfoToOrchestratedAgent(agent as AgentInfo);
-    });
+    const allIds = Array.from(this.agentManager.agents.keys());
+    // eslint-disable-next-line no-console
+    console.log('[ORCH][DEBUG][listAgents] all agent IDs:', allIds);
+    return Array.from(this.agentManager.agents.values()).map(agentInfoToOrchestratedAgent);
   }
 
   reset() {

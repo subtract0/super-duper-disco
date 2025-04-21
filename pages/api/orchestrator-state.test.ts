@@ -50,7 +50,7 @@ describe('/api/orchestrator-state API', () => {
     let { req, res } = createMocks({ method: 'GET' });
     await handler(req, res);
     let data = JSON.parse(res._getData());
-    expect(data.health['orch-state-3'].status).toBe('running');
+    expect(data.health['orch-state-3'].status).toBe('healthy');
     // Stop the agent
     agentManager.stopAgent('orch-state-3');
     agent = agentManager.agents.get('orch-state-3');

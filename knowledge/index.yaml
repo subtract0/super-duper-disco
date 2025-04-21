@@ -1,0 +1,55 @@
+# Central knowledge index for agent swarms and LLM bootstrapping
+# This file maps all protocols, tasks, project vision, logs, and their relationships
+
+protocols:
+  - id: protocol-cascade-autonomy
+    file: protocols/Cascade_Autonomous_Development_Protocol.md
+    title: Cascade Autonomous Development Protocol
+    tags: [autonomy, escalation, agent]
+    updated: 2025-04-19
+
+vision:
+  - id: vision-project
+    file: vision/PROJECT_VISION_ARCHITECTURE.md
+    title: Project Vision & Architecture
+    tags: [architecture, goals, vision]
+    updated: 2025-04-19
+
+tasks:
+  - id: tasks-current
+    file: tasks/TASK_STATE.md
+    title: Current Task State
+    tags: [tasks, status, dependencies]
+    updated: 2025-04-19
+
+history:
+  - id: history-plan
+    file: history/PLAN.md
+    title: Project Plan & Milestones
+    tags: [plan, milestones, log]
+    updated: 2025-04-19
+  - id: history-backlog
+    file: history/BACKLOG_REFERENCE.md
+    title: Backlog Reference
+    tags: [backlog, tickets, history]
+    updated: 2025-04-19
+  - id: history-tickets
+    file: history/TICKETS_FROM_THE_PAST.md
+    title: Tickets from the Past
+    tags: [tickets, bugs, regression]
+    updated: 2025-04-19
+
+# Cross-references and relationships
+relationships:
+  - from: protocol-cascade-autonomy
+    to: tasks-current
+    type: governs
+  - from: vision-project
+    to: tasks-current
+    type: informs
+  - from: history-plan
+    to: tasks-current
+    type: tracks
+  - from: history-backlog
+    to: tasks-current
+    type: informs

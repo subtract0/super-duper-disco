@@ -33,6 +33,25 @@ import { createAgent } from './agents/factory';
 export class AgentManager {
   agents: Map<string, AgentInfo> = new Map();
 
+  // Hydrate all agents from persistent storage
+  static async hydrateFromPersistent(): Promise<AgentManager> {
+    const mgr = new AgentManager();
+    try {
+      const { listAgentInfos } = await import('./agentRegistry');
+      const agentInfos = await listAgentInfos();
+      for (const info of agentInfos) {
+        // Do NOT hydrate instance; only metadata. Instance is created on demand.
+        mgr.agents.set(info.id, { ...info, instance: undefined });
+      }
+      // Ensure global singleton is always this hydrated instance
+      (globalThis as any).__CASCADE_AGENT_MANAGER__ = mgr;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[AgentManager] Failed to hydrate from persistent store:', e);
+    }
+    return mgr;
+  }
+
   /**
    * Deploys and starts a new agent of the given type.
    * Uses createAgent factory for modularity.
@@ -42,13 +61,44 @@ export class AgentManager {
     if (this.agents.has(id)) {
       const existing = this.agents.get(id);
       if (existing && existing.instance && typeof existing.instance.stop === 'function') {
-        existing.instance.stop();
+        try {
+          existing.instance.stop();
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error(
+            `[AgentManager] existing.instance.stop() failed for id=${id}, type=${type}:`,
+            err,
+            err instanceof Error ? err.stack : undefined
+          );
+          throw err;
+        }
         // Do NOT delete from map; keep agent for lifecycle tracking
       }
     }
     // No persistent memory hydration in new design
-    const agent = createAgent(id, name, type, config);
-    agent.start();
+    let agent;
+    try {
+      agent = createAgent(id, name, type, config);
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[AgentManager] createAgent failed for id=${id}, type=${type}:`,
+        err,
+        err instanceof Error ? err.stack : undefined
+      );
+      throw err;
+    }
+    try {
+      agent.start();
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[AgentManager] agent.start() failed for id=${id}, type=${type}:`,
+        e,
+        e instanceof Error ? e.stack : undefined
+      );
+      throw e;
+    }
     const now = Date.now();
     // Set status to 'running' after start
     agent.status = 'running';
@@ -60,7 +110,17 @@ export class AgentManager {
         info.status = 'running';
       }
     };
-    agent.on('heartbeat', heartbeatListener);
+    try {
+      agent.on('heartbeat', heartbeatListener);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[AgentManager] agent.on('heartbeat') failed for id=${id}, type=${type}:`,
+        e,
+        e instanceof Error ? e.stack : undefined
+      );
+      throw e;
+    }
     // Store listener for later removal
     // @ts-expect-error: _heartbeatListener is used for test cleanup
     (agent as BaseAgent)._heartbeatListener = heartbeatListener;
@@ -88,6 +148,14 @@ export class AgentManager {
       deploymentUrl: null,
       lastDeploymentError: null,
     });
+    // Persist agent info to Supabase
+    try {
+      const { saveAgentInfo } = await import('./agentRegistry');
+      await saveAgentInfo({ ...this.agents.get(id), instance: undefined });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[AgentManager] Failed to persist agent to Supabase:', e);
+    }
     // Keep logs in sync with instance
     this.syncAgentLogs(id);
     // Debug log
@@ -132,7 +200,6 @@ export class AgentManager {
     }
   }
 
-
   async stopAgent(id: string) {
     const info = this.agents.get(id);
     if (info && info.instance) {
@@ -144,6 +211,14 @@ export class AgentManager {
       info.instance.stop();
       this.syncAgentLogs(id);
       info.status = 'stopped';
+      // Persist stopped status to Supabase
+      try {
+        const { saveAgentInfo } = await import('./agentRegistry');
+        await saveAgentInfo({ ...info, instance: undefined });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[AgentManager] Failed to persist stopped agent to Supabase:', e);
+      }
       info.lastActivity = Date.now();
       // Set health to crashed
       (async () => {
@@ -165,7 +240,6 @@ export class AgentManager {
   stop(id: string) {
     return this.stopAgent(id);
   }
-
 
   getAgentHealth(id: string) {
     const info = this.agents.get(id);
@@ -197,8 +271,6 @@ export class AgentManager {
     return info ? info.instance?.getLogs() : [];
   }
 
-
-
   listAgents() {
     return Array.from(this.agents.values());
   }
@@ -207,22 +279,33 @@ export class AgentManager {
   list() {
     return this.listAgents();
   }
-  clearAllAgents() {
+
+  async clearAllAgents() {
     for (const info of this.agents.values()) {
       if (info && info.instance && typeof info.instance.stop === 'function') {
         info.instance.stop();
         // Set health to crashed
         (async () => {
-        try {
-          const mod = await import('./agentHealth');
-          mod.agentHealthStore.setHealth(info.id, 'crashed');
-        } catch (e) {
-          // ignore if agentHealthStore is not available
-        }
-      })();
+          try {
+            const mod = await import('./agentHealth');
+            mod.agentHealthStore.setHealth(info.id, 'crashed');
+          } catch (e) {
+            // ignore if agentHealthStore is not available
+          }
+        })();
       }
     }
     this.agents.clear();
+    // Remove all agents from persistent storage
+    try {
+      const { listAgentInfos, deleteAgentInfo } = await import('./agentRegistry');
+      const agents = await listAgentInfos();
+      for (const a of agents) {
+        await deleteAgentInfo(a.id);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[AgentManager] Failed to clear all agents from Supabase:', e);
+    }
   }
 }
-

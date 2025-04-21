@@ -28,6 +28,8 @@ jest.mock('./supabaseAgentOps', () => ({
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
 }));
 
+import 'openai/shims/node';
+
 /**
  * @jest-environment node
  */

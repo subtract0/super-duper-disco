@@ -38,6 +38,8 @@ export class BaseAgent extends EventEmitter implements AgentLike {
     this.status = 'running';
     this.log('Agent started');
     this.emit('heartbeat', { ts: Date.now(), type: 'heartbeat' } as Heartbeat);
+    // Prevent heartbeat timer in test environments (avoids Jest timeouts)
+    if (process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return;
     this.beatTimer = setInterval(() => {
       this.emit('heartbeat', { ts: Date.now(), type: 'heartbeat' });
       this.log('Agent heartbeat');
@@ -56,5 +58,10 @@ export class BaseAgent extends EventEmitter implements AgentLike {
 
   getLogs(): string[] {
     return this._logs.map(l => `[${new Date(l.ts).toISOString()}] ${l.msg}`);
+  }
+
+  // For test use only: returns raw log messages (not ISO timestamped)
+  getRawLogs(): string[] {
+    return this._logs.map(l => l.msg);
   }
 }

@@ -5,14 +5,15 @@ import { agentHistoryStore } from '../../src/orchestration/agentHistory';
 import { agentHealthStore } from '../../src/orchestration/agentHealth';
 import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Return health for all agents, including uptime, crashCount, lastHeartbeat
   const agents = orchestrator.listAgents();
   const now = Date.now();
   const ONE_DAY = 24 * 60 * 60 * 1000;
-  const health = agents.map(agent => {
+  const health = [];
+  for (const agent of agents) {
     // Analytics: calculate uptimePercent, MTTR, downtime (last 24h)
-    const deployments = agentHistoryStore.getDeploymentsByAgent(agent.id).filter(
+    const deployments = (await agentHistoryStore.getDeploymentsByAgent(agent.id)).filter(
       d => now - d.timestamp < ONE_DAY
     );
     // Assume each deployment is a recovery from crash or downtime
@@ -45,7 +46,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
     uptimePercent = 1 - downtime / ONE_DAY;
     if (uptimePercent < 0) uptimePercent = 0;
     if (uptimePercent > 1) uptimePercent = 1;
-    return {
+    health.push({
       id: agent.id,
       status: agentHealthStore.getHealth(agent.id),
       uptime: agent.instance && agent.instance.status === 'running' && agent.instance.lastHeartbeat ? now - agent.instance.lastHeartbeat : 0,
@@ -54,7 +55,7 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
       uptimePercent,
       mttr,
       downtime
-    };
-  });
+    });
+  }
   res.status(200).json({ health });
 }

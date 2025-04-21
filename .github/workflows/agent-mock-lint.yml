@@ -1,0 +1,24 @@
+name: Agent Mock Compliance Lint
+
+on:
+  pull_request:
+    paths:
+      - 'tests/**/*.test.ts'
+      - '.cascade-lint.js'
+      - 'src/orchestration/agents/**'
+      - 'CONTRIBUTING.md'
+      - 'PLAN.md'
+
+jobs:
+  agent-mock-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run agent mock compliance lint
+        run: node .cascade-lint.js

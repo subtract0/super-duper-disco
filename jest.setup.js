@@ -1,3 +1,6 @@
+// IMPORTANT: Load OpenAI shims BEFORE any other imports or polyfills.
+import 'openai/shims/node';
+
 // Polyfill fetch and Web Fetch API types for Node.js test environment (OpenAI/LangChain compatibility)
 try {
   const undici = require('undici');
@@ -10,7 +13,5 @@ try {
   console.warn('undici not available for fetch polyfill:', e);
 }
 
-// All other imports must come after the polyfill.
-import 'openai/shims/node';
-export {};
 import '@testing-library/jest-dom';
+export {};

@@ -1,6 +1,8 @@
 import handler from './agent-health';
 import { createMocks } from 'node-mocks-http';
 import { agentManager } from '../../src/orchestration/agentManagerSingleton';
+import * as agentHistoryModule from '../../src/orchestration/agentHistory';
+jest.spyOn(agentHistoryModule.agentHistoryStore, 'getDeploymentsByAgent');
 import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 
 describe('/api/agent-health API', () => {
@@ -10,6 +12,7 @@ describe('/api/agent-health API', () => {
   });
 
   it('returns health for all agents (empty)', async () => {
+    (agentHistoryModule.agentHistoryStore.getDeploymentsByAgent as jest.Mock).mockResolvedValueOnce([]);
     const { req, res } = createMocks({ method: 'GET' });
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);
@@ -28,6 +31,9 @@ describe('/api/agent-health API', () => {
       config: {},
     };
     await orchestrator.launchAgent(agentConfig);
+    (agentHistoryModule.agentHistoryStore.getDeploymentsByAgent as jest.Mock).mockResolvedValueOnce([
+      { agentId: 'api-health-1', cardName: 'Test Agent', timestamp: Date.now(), host: 'localhost', config: { status: 'running' } }
+    ]);
     const { req, res } = createMocks({ method: 'GET' });
     await handler(req, res);
     expect(res._getStatusCode()).toBe(200);

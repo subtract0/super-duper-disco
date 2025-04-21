@@ -1,12 +1,17 @@
 import React, { useState } from "react";
+import Image from "next/image";
 import AgentCardDetailsModal from "./AgentCardDetailsModal";
 
+// Extensible agent config type for modal/deployment
 export type AgentIdeaCard = {
   id: string;
   name: string;
   description: string;
   image: string;
   alt?: string;
+  // Config fields for extensibility (unified with backend)
+  config?: Record<string, any>;
+  role?: string;
 };
 
 interface Props {
@@ -59,9 +64,11 @@ export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Prop
             }}
             onClick={() => handleCardClick(card)}
           >
-          <img
+          <Image
             src={card.image}
             alt={card.alt || card.name}
+            width={220}
+            height={140}
             style={{
               width: '100%',
               height: 140,
@@ -69,6 +76,8 @@ export default function AgentBrokerCardDeck({ cards, onSelect, loadingId }: Prop
               borderTopLeftRadius: 14,
               borderTopRightRadius: 14,
             }}
+            priority
+            unoptimized={false}
           />
           <div style={{ padding: 16 }}>
             <h3 style={{ fontFamily: 'serif', fontWeight: 700, fontSize: 20, marginBottom: 8 }}>{card.name}</h3>

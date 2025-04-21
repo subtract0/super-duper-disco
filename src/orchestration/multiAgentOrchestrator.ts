@@ -1,17 +1,23 @@
 import { agentManager } from './agentManagerSingleton';
 import { buildA2AEnvelope, A2AEnvelope } from '../protocols/a2aAdapter';
+import type { AgentMessageRecord } from './agentMessageMemory';
+import type { AgentMessageRecord } from './agentMessageMemory';
 
 /**
  * MultiAgentOrchestrator: Manages the lifecycle and workflow of all core agents in the Cascade protocol.
  * Handles agent instantiation, workflow progression, and inter-agent messaging.
  */
-type AgentHealth = "pending" | "healthy" | "crashed" | "recovering";
+type AgentHealth = "pending" | "healthy" | "crashed" | "recovering" | "unknown";
 
 export class MultiAgentOrchestrator {
   agentIds: string[] = ["planner", "researcher", "developer", "devops"];
   state: string = "idle";
+  messageBus: A2AEnvelope[] = [];
 
-  constructor(openAIApiKey: string) {
+  private agentMessageMemory: { save: (msg: AgentMessageRecord) => Promise<void> };
+  constructor(openAIApiKey: string, agentMessageMemory: { save: (msg: AgentMessageRecord) => Promise<void> }) {
+    // Dependency injection for testability and protocol compliance
+    this.agentMessageMemory = agentMessageMemory;
     // Deploy and start all agents via AgentManager
     if (!agentManager) throw new Error('agentManager is undefined. Ensure agentManager is imported and initialized.');
     agentManager.deployAgent("planner", "Planner Agent", "langchain", { openAIApiKey });
@@ -48,17 +54,42 @@ export class MultiAgentOrchestrator {
   /**
    * Send a message from one agent to another and log the interaction.
    */
+  /**
+   * Send a message from one agent to another using a strict A2A protocol envelope.
+   * Ensures protocol compliance and Model Context Protocol (MCP) persistence.
+   */
   async sendMessage(from: string, to: string, message: string): Promise<string> {
+  // Build a protocol-compliant A2AEnvelope
+  const envelope: A2AEnvelope = buildA2AEnvelope({
+    type: 'agent-message',
+    from,
+    to,
+    body: message,
+    threadId: `${from}->${to}`,
+    // Optionally: signature, timestamp, etc.
+  });
+  // Add to orchestrator message bus
+  this.messageBus.push(envelope);
+  // MCP persistence: ensure protocol-compliant save
+  try {
+    await this.agentMessageMemory.save({
+      id: envelope.id,
+      type: 'a2a',
+      content: typeof message === 'string' ? message : JSON.stringify(message),
+      role: 'agent',
+      provenance: 'a2a-protocol',
+      thread_id: envelope.threadId,
+      agent_id: to,
+      user_id: from,
+      tags: ['a2a', 'protocol', 'agent-message'],
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[MultiAgentOrchestrator][A2A->MCP] Failed to persist A2A message to MCP:', err);
+  }
+
     const info = agentManager.agents.get(to);
     if (!info) throw new Error(`Agent with id '${to}' not found.`);
-    // Build and log an A2A envelope for the message
-    const envelope: A2AEnvelope = buildA2AEnvelope({
-      type: 'agent-message',
-      from,
-      to,
-      body: message,
-      // Optionally: threadId, signature, etc.
-    });
     info.logs.push(`[A2A] ${JSON.stringify(envelope)}`);
     // Delegate to the correct method on the agent instance
     if (to === "researcher" && info.instance.researchTopic) {

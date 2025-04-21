@@ -46,11 +46,12 @@ function agentInfoToOrchestratedAgent(agent: AgentInfo, forcedStatus?: string): 
   };
 }
 
-export type AgentMessage = {
+export interface AgentMessage {
   from: string;
   to: string;
   content: any;
   timestamp: number;
+  threadId?: string;
 };
 
 export type SwarmState = {
@@ -98,6 +99,9 @@ if (typeof process !== 'undefined' && process.env && process.env.SLACK_WEBHOOK_U
 }
 
 export class AgentOrchestrator {
+  public get agentManager(): import('./agentManager').AgentManager {
+    return (globalThis as any).__CASCADE_AGENT_MANAGER__;
+  }
   public readonly instanceId: string;
   constructor(agentManagerInstance?: import('./agentManager').AgentManager, agentMessageMemory?: { save: (msg: Record<string, unknown>) => Promise<void> }) {
     this.instanceId = `${Date.now()}-${Math.floor(Math.random()*1e9)}`;
@@ -485,20 +489,10 @@ export class AgentOrchestrator {
   /**
    * Get an agent by ID.
    * @param agentId The agent's unique ID
-   * @returns The agent, or undefined if not found
+   * @returns Promise<OrchestratedAgent | undefined>
    */
-  getAgent(agentId: string): OrchestratedAgent | undefined {
-    const allIds = Array.from(this.agentManager.agents.keys());
-    // eslint-disable-next-line no-console
-    console.log('[ORCH][DEBUG][getAgent] instanceId:', this.instanceId, 'all agent IDs:', allIds, 'looking for', agentId, 'typeof agentId:', typeof agentId);
-    for (const key of allIds) {
-      const keyHex = Buffer.from(key, 'utf8').toString('hex');
-      const idHex = Buffer.from(agentId, 'utf8').toString('hex');
-      console.log('[ORCH][DEBUG][getAgent] key:', key, 'id:', agentId, 'keyHex:', keyHex, 'idHex:', idHex, 'equal:', key === agentId, 'key.length:', key.length, 'id.length:', agentId.length);
-    }
-    // Force flush (for Node.js)
-    if (process.stdout && process.stdout.write) process.stdout.write('');
-    const agentInfo = this.agentManager.agents.get(agentId);
+  async getAgent(agentId: string): Promise<OrchestratedAgent | undefined> {
+    const agentInfo = await this.agentManager.getAgentById(agentId);
     console.log('[ORCH][DEBUG][getAgent] lookup result:', agentInfo);
     if (!agentInfo) return undefined;
     return agentInfoToOrchestratedAgent(agentInfo);
@@ -519,13 +513,14 @@ export class AgentOrchestrator {
 
   /**
    * List all orchestrated agents.
-   * @returns Array of OrchestratedAgent
+   * @returns Promise<Array<OrchestratedAgent>>
    */
-  listAgents(): OrchestratedAgent[] {
-    const allIds = Array.from(this.agentManager.agents.keys());
+  async listAgents(): Promise<OrchestratedAgent[]> {
+    const agentInfos = await this.agentManager.listAgents();
+    const allIds = agentInfos.map(a => a.id);
     // eslint-disable-next-line no-console
     console.log('[ORCH][DEBUG][listAgents] all agent IDs:', allIds);
-    return Array.from(this.agentManager.agents.values()).map(agentInfoToOrchestratedAgent);
+    return agentInfos.map(agentInfoToOrchestratedAgent);
   }
 
   reset() {

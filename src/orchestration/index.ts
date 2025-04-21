@@ -1,3 +1,7 @@
+// Initialize Slack log forwarding if enabled
+import { setupSlackLogForwarderFromEnv } from './slackLogForwarder';
+setupSlackLogForwarderFromEnv();
+
 export * from './agentOrchestrator';
 export { AgentManager } from './agentManager';
 export * from './agentManagerSingleton';

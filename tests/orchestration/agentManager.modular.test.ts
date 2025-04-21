@@ -1,9 +1,16 @@
-import { agentManager } from '../../src/orchestration/agentManagerSingleton';
+import { getAgentManagerSingleton } from '../../src/orchestration/agentManagerSingleton';
+let agentManager: any; // Will be hydrated before each test
+
 import { LangChainAgent } from '../../src/orchestration/langchainAgent';
 import { AutoGenAgent } from '../../src/orchestration/autoGenAgent';
 
+// ⚠️ TEST HARNESS NOTE: Always hydrate the singleton before use. See PLAN.md [2025-04-21T21:22+02:00] for details on test harness/module isolation bugs.
 describe('AgentManager modular support', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    agentManager = await getAgentManagerSingleton();
+    if (!agentManager || typeof agentManager.clearAllAgents !== 'function') {
+      throw new Error('[TEST ERROR] agentManager singleton not hydrated or missing clearAllAgents. See PLAN.md for guidance.');
+    }
     agentManager.clearAllAgents();
   });
 

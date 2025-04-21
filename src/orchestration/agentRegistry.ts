@@ -1,3 +1,4 @@
+// agentRegistry is mocked in tests to avoid real supabase calls
 import { supabase } from '../utils/supabaseClient';
 import type { AgentInfo } from './agentManager';
 
@@ -36,3 +37,4 @@ export async function listAgentInfos(): Promise<AgentInfo[]> {
   const { data } = await supabase.from(TABLE).select('*');
   return data || [];
 }
+// Jest test files should mock all these methods to prevent real DB calls.

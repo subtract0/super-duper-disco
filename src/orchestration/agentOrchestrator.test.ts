@@ -14,8 +14,8 @@ import { orchestrator } from './orchestratorSingleton';
 import { OrchestratedAgent } from './agentOrchestrator';
 
 describe('AgentOrchestrator', () => {
-  beforeEach(() => {
-    agentManager.clearAllAgents();
+  beforeEach(async () => {
+    await agentManager.clearAllAgents();
   });
 
   test('should launch a real agent and reflect health', async () => {

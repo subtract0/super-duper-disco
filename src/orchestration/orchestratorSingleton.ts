@@ -18,7 +18,18 @@ export async function getOrchestratorSingleton(): Promise<AgentOrchestrator> {
 export let orchestrator: AgentOrchestrator;
 getOrchestratorSingleton().then(o => { orchestrator = o; });
 
+// Reset the orchestrator singleton for prod/test
+export function resetOrchestratorSingleton() {
+  delete (globalThis as any)[globalKey];
+  orchestratorPromise = null;
+  orchestrator = undefined as any;
+  if (typeof console !== 'undefined') {
+    console.debug('[OrchestratorSingleton] Singleton reset');
+  }
+}
 // Helper for tests to reset singleton
-export function resetOrchestratorForTest() {
-  (globalThis as any)[globalKey] = new AgentOrchestrator(agentManager);
+export async function resetOrchestratorForTest() {
+  resetOrchestratorSingleton();
+  const mgr = await (await import('./agentManager')).AgentManager.hydrateFromPersistent();
+  (globalThis as any)[globalKey] = new AgentOrchestrator(mgr);
 }

@@ -1,5 +1,5 @@
 // Polyfill fetch for Node.js (needed for OpenAI SDK and other ESM modules)
-import 'openai/shims/node';
+require('openai/shims/node');
 
 const { TextEncoder, TextDecoder } = require('util');
 

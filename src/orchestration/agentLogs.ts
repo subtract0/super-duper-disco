@@ -11,6 +11,27 @@ export type AgentLogEntry = {
   message: string;
 };
 
+// Optional log forwarding interface
+export interface AgentLogForwarder {
+  forwardLog(entry: AgentLogEntry): void;
+}
+
+// No-op default forwarder
+class NoopLogForwarder implements AgentLogForwarder {
+  forwardLog(_entry: AgentLogEntry) {}
+}
+
+// Forwarder instance, set at runtime if enabled
+let logForwarder: AgentLogForwarder = new NoopLogForwarder();
+
+/**
+ * Call this at app init to set a custom log forwarder (e.g., for Slack/webhook).
+ * If not called, logs are only stored in memory.
+ */
+export function setAgentLogForwarder(forwarder: AgentLogForwarder) {
+  logForwarder = forwarder;
+}
+
 export class AgentLogStore {
   private logs: AgentLogEntry[] = [];
 
@@ -19,6 +40,7 @@ export class AgentLogStore {
    */
   addLog(entry: AgentLogEntry) {
     this.logs.push(entry);
+    logForwarder.forwardLog(entry);
   }
 
   /**

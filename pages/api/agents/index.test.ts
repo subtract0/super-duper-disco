@@ -4,8 +4,8 @@ jest.mock('../../../src/orchestration/supabaseAgentOps', () => ({
 }));
 
 import handler from './index';
-import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../../src/orchestration/agentManagerSingleton';
+import { getOrchestratorSingleton, orchestrator as orchestratorSync, resetOrchestratorSingleton } from '../../../src/orchestration/orchestratorSingleton';
+import { getAgentManagerSingleton, agentManager as agentManagerSync, resetAgentManagerSingleton } from '../../../src/orchestration/agentManagerSingleton';
 import { createMocks } from 'node-mocks-http';
 
 describe('/api/agents/index API', () => {
@@ -23,18 +23,29 @@ describe('/api/agents/index API', () => {
     }
   }
 
+  // Helper to always get fresh orchestrator and agentManager after reset
+  let orchestrator: typeof orchestratorSync;
+  let agentManager: typeof agentManagerSync;
+  async function refreshSingletons() {
+    agentManager = await getAgentManagerSingleton();
+    orchestrator = await getOrchestratorSingleton();
+  }
+
   beforeEach(async () => {
+    // Reset singletons to ensure test isolation
+    resetAgentManagerSingleton();
+    resetOrchestratorSingleton();
+    await refreshSingletons();
+    // eslint-disable-next-line no-console
+    console.log('[TEST DEBUG] beforeEach: orchestrator reset, agentManager reset');
     // Extra: ensure agentManager is also reset
     for (const agent of agentManager.listAgents()) {
       await agentManager.stopAgent(agent.id);
     }
     // eslint-disable-next-line no-console
     console.log('BeforeEach: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    orchestrator.reset();
-    // Fail early if agents remain
-    const agents = orchestrator.listAgents();
-    if (agents.length > 0) {
-      throw new Error('Agent pollution before test: ' + JSON.stringify(agents, null, 2));
+    if (orchestrator.listAgents().length > 0) {
+      throw new Error('Agent pollution before test: ' + JSON.stringify(orchestrator.listAgents(), null, 2));
     }
   });
 
@@ -42,7 +53,12 @@ describe('/api/agents/index API', () => {
     for (const agent of agentManager.listAgents()) {
       await agentManager.stopAgent(agent.id);
     }
-    orchestrator.reset();
+    // Reset singletons after test
+    resetAgentManagerSingleton();
+    resetOrchestratorSingleton();
+    await refreshSingletons();
+    // eslint-disable-next-line no-console
+    console.log('[TEST DEBUG] afterEach: orchestrator reset, agentManager reset');
     // eslint-disable-next-line no-console
     console.log('AfterEach: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
   });

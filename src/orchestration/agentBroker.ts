@@ -143,7 +143,7 @@ export class AgentBroker {
       host,
       config: card.config,
     });
-    agentHistoryStore.addDeployment({
+    await agentHistoryStore.save({
       agentId: agent.id,
       cardName: card.name,
       timestamp: Date.now(),

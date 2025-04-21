@@ -1,5 +1,6 @@
 // Jest configuration for Node.js + Next.js + OpenAI/LangChain compatibility
 module.exports = {
+  setupFiles: ["<rootDir>/tests/e2e/jest.setup.js"],
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: [
     '<rootDir>/jest.setup.js',
@@ -10,7 +11,7 @@ module.exports = {
     '^@/(.*)$': '<rootDir>/src/$1'
   },
   transform: {
-    '^.+\\.(ts|tsx|js|jsx)$': 'babel-jest',
+    '^.+\\.(t|j)sx?$': ['@swc/jest'],
   },
   testPathIgnorePatterns: [
     '/node_modules/',

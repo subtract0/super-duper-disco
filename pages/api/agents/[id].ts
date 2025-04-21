@@ -13,20 +13,33 @@ function debugLog(...args: any[]) {
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  debugLog('[DEBUG][API][id] Handler entry:', JSON.stringify({ method: req.method, url: req.url, query: req.query, body: req.body }));
   const { id } = req.query;
-  if (typeof id !== 'string') {
-    res.status(400).json({ error: 'Invalid agent id (must be string)' });
+  if (typeof id !== 'string' || !id) {
+    debugLog('[ERROR][API][id] Invalid or missing id in req.query:', JSON.stringify(req.query));
+    res.status(400).json({ error: 'Invalid or missing agent id (must be string)', query: req.query });
     return;
   }
   if (req.method === "DELETE") {
     // Stop agent via orchestrator
     const agentManager = await getAgentManagerSingleton();
-debugLog('[DEBUG][DELETE /api/agents/[id]] Incoming id:', id);
-debugLog('[DEBUG][DELETE /api/agents/[id]] All agent IDs:', agentManager.listAgents().map(a => a.id));
-const agentIds = agentManager.listAgents().map(a => a.id);
-debugLog('[DEBUG][DELETE /api/agents/[id]] All agent IDs (redundant check):', agentIds);
     const orchestrator = await getOrchestratorSingleton();
-    const found = orchestrator.getAgent(id);
+    debugLog('[DEBUG][DELETE /api/agents/[id]] Incoming id:', id);
+    const orchAgents = await orchestrator.listAgents();
+    const mgrAgents = await agentManager.listAgents();
+    debugLog('[DEBUG][DELETE /api/agents/[id]] orchestrator agents:', orchAgents.map(a => a.id));
+    debugLog('[DEBUG][DELETE /api/agents/[id]] agentManager agents:', mgrAgents.map(a => a.id));
+    // Defensive: Log existence in both orchestrator and agentManager before deletion
+    debugLog('[DEBUG][DELETE /api/agents/[id]] orchestrator.hasAgent:', !!(await orchestrator.getAgent(id)));
+    debugLog('[DEBUG][DELETE /api/agents/[id]] agentManager.has:', agentManager.agents.has(id));
+    let found;
+    try {
+      found = await orchestrator.getAgent(id);
+    } catch (err) {
+      debugLog('[ERROR][DELETE /api/agents/[id]] orchestrator.getAgent threw:', err);
+      res.status(500).json({ error: 'orchestrator.getAgent failed', detail: err instanceof Error ? err.message : err });
+      return;
+    }
     if (!found) {
       res.status(404).json({ error: 'Agent not found for deletion' });
       return;
@@ -46,8 +59,11 @@ debugLog('[DEBUG][DELETE /api/agents/[id]] All agent IDs (redundant check):', ag
     }
     // Hydrate from persistent after deletion
     await (await import('../../../src/orchestration/agentManager')).AgentManager.hydrateFromPersistent();
+    // Reset/recreate orchestrator singleton to use the latest AgentManager
+    const { getOrchestratorSingleton } = await import('../../../src/orchestration/orchestratorSingleton');
+    const newOrchestrator = await getOrchestratorSingleton();
     // Confirm removal from orchestrator and persistent registry
-    const stillExists = orchestrator.getAgent(id);
+    const stillExists = await newOrchestrator.getAgent(id);
     const { getAgentInfo } = await import('../../../src/orchestration/agentRegistry');
     const stillInDb = await getAgentInfo(id);
     if (!stillExists && !stillInDb) {
@@ -59,29 +75,33 @@ debugLog('[DEBUG][DELETE /api/agents/[id]] All agent IDs (redundant check):', ag
     }
   } else if (req.method === "GET") {
     debugLog('[DEBUG][GET /api/agents/[id]] Handler entered. id:', id);
-    // Get agent details from orchestrator
     const agentManager = await getAgentManagerSingleton();
-    debugLog('[DEBUG][GET /api/agents/[id]] Incoming id:', id);
-    debugLog('[DEBUG][GET /api/agents/[id]] All agent IDs:', agentManager.listAgents().map(a => a.id));
-    const agentIds = agentManager.listAgents().map(a => a.id);
-    debugLog('[DEBUG][GET /api/agents/[id]] All agent IDs (redundant check):', agentIds);
     const orchestrator = await getOrchestratorSingleton();
-    let agent = orchestrator.getAgent(id);
+    const orchAgents = await orchestrator.listAgents();
+    const mgrAgents = await agentManager.listAgents();
+    debugLog('[DEBUG][GET /api/agents/[id]] orchestrator agents:', orchAgents.map(a => a.id));
+    debugLog('[DEBUG][GET /api/agents/[id]] agentManager agents:', mgrAgents.map(a => a.id));
+    debugLog('[DEBUG][GET /api/agents/[id]] Incoming id:', id);
+    debugLog('[DEBUG][GET /api/agents/[id]] All agent IDs:', mgrAgents.map(a => a.id));
+    const agentIds = mgrAgents.map(a => a.id);
+    debugLog('[DEBUG][GET /api/agents/[id]] All agent IDs (redundant check):', agentIds);
+    // Always rehydrate AgentManager before looking up the agent
+    await (await import('../../../src/orchestration/agentManager')).AgentManager.hydrateFromPersistent();
+    // Recreate orchestrator singleton to use the latest manager
+    const { getOrchestratorSingleton } = await import('../../../src/orchestration/orchestratorSingleton');
+    const newOrchestrator = await getOrchestratorSingleton();
+    debugLog('[DEBUG][GET /api/agents/[id]] orchestrator.instanceId:', newOrchestrator.instanceId);
+    let agent = await newOrchestrator.getAgent(id);
+    const allOrchIds = (await newOrchestrator.listAgents()).map(a => a.id);
+    const allMgrIds = (await agentManager.listAgents()).map(a => a.id);
+    debugLog('[DEBUG][GET /api/agents/[id]] After hydration: orchestrator agent IDs:', allOrchIds);
+    debugLog('[DEBUG][GET /api/agents/[id]] After hydration: agentManager agent IDs:', allMgrIds);
+    // --- Enhanced lifecycle debug ---
+    const mgrList = await agentManager.listAgents();
+    const orchList = await newOrchestrator.listAgents();
+    debugLog('[DEBUG][GET /api/agents/[id]] agentManager.listAgents() full:', mgrList.map(a => a.id));
+    debugLog('[DEBUG][GET /api/agents/[id]] orchestrator.listAgents() full:', orchList.map(a => a.id));
     if (!agent) {
-      // Try to hydrate from persistent
-      await (await import('../../../src/orchestration/agentManager')).AgentManager.hydrateFromPersistent();
-      // Recreate orchestrator singleton to use the latest manager
-      const { getOrchestratorSingleton } = await import('../../../src/orchestration/orchestratorSingleton');
-      const newOrchestrator = await getOrchestratorSingleton();
-      debugLog('[DEBUG][GET /api/agents/[id]] orchestrator.instanceId:', newOrchestrator.instanceId);
-      agent = newOrchestrator.getAgent(id);
-    }
-    debugLog('[DEBUG][GET /api/agents/[id]] agent from orchestrator.getAgent:', agent, 'typeof:', typeof agent);
-    if (!agent) {
-      const allOrchIds = (await getOrchestratorSingleton()).listAgents().map(a => a.id);
-      const allMgrIds = agentManager.listAgents().map(a => a.id);
-      debugLog('[DEBUG][GET /api/agents/[id]] After hydration: orchestrator agent IDs:', allOrchIds);
-      debugLog('[DEBUG][GET /api/agents/[id]] After hydration: agentManager agent IDs:', allMgrIds);
       res.status(404).json({ error: 'Agent not found' });
       return;
     }

@@ -9,6 +9,8 @@ import type { AgentMessageRecord } from './agentMessageMemory';
  */
 type AgentHealth = "pending" | "healthy" | "crashed" | "recovering" | "unknown";
 
+// ⚠️ NOTE: Direct usage of agentManager.agents is only safe if the singleton is guaranteed to be initialized (i.e., after awaiting getAgentManagerSingleton()).
+// See PLAN.md [2025-04-21T21:18+02:00] Plateau Summary for details on test harness/module isolation issues.
 export class MultiAgentOrchestrator {
   agentIds: string[] = ["planner", "researcher", "developer", "devops"];
   state: string = "idle";

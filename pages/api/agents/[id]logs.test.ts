@@ -1,9 +1,16 @@
 import handler from './[id]logs';
 import { createMocks } from 'node-mocks-http';
-import { orchestrator } from '../../../src/orchestration/orchestratorSingleton';
-import { agentManager } from '../../../src/orchestration/agentManagerSingleton';
+import { getOrchestratorSingleton, orchestrator as orchestratorSync, resetOrchestratorSingleton } from '../../../src/orchestration/orchestratorSingleton';
+import { getAgentManagerSingleton, agentManager as agentManagerSync, resetAgentManagerSingleton } from '../../../src/orchestration/agentManagerSingleton';
 
 describe('/api/agents/agentLogs API', () => {
+  // Helper to always get fresh orchestrator and agentManager after reset
+  let orchestrator: typeof orchestratorSync;
+  let agentManager: typeof agentManagerSync;
+  async function refreshSingletons() {
+    agentManager = await getAgentManagerSingleton();
+    orchestrator = await getOrchestratorSingleton();
+  }
   const agentConfig = {
     id: 'test-logs-1',
     type: 'test-type',
@@ -13,8 +20,15 @@ describe('/api/agents/agentLogs API', () => {
   };
 
   beforeEach(async () => {
-    // Ensure agent exists and is running
+    // Reset singletons to ensure test isolation
+    resetAgentManagerSingleton();
+    resetOrchestratorSingleton();
+    await refreshSingletons();
+    // eslint-disable-next-line no-console
+    console.log('[TEST DEBUG] beforeEach: orchestrator reset, agentManager reset');
     await orchestrator.launchAgent(agentConfig);
+    // eslint-disable-next-line no-console
+    console.log('[TEST DEBUG] after launchAgent:', orchestrator.listAgents().map(a => a.id));
   });
 
   afterEach(async () => {
@@ -22,6 +36,12 @@ describe('/api/agents/agentLogs API', () => {
     if (orchestrator.getAgent(agentConfig.id)) {
       await orchestrator.stopAgent(agentConfig.id);
     }
+    // Reset singletons after test
+    resetAgentManagerSingleton();
+    resetOrchestratorSingleton();
+    await refreshSingletons();
+    // eslint-disable-next-line no-console
+    console.log('[TEST DEBUG] afterEach: orchestrator reset, agentManager reset');
   });
 
   it('GET returns logs for running agent', async () => {

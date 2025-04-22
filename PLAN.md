@@ -5,34 +5,31 @@
 
 <!-- Only the most important and current ~150 lines are retained. Older entries have been archived in PLAN-past.md. -->
 
-## [2025-04-22T02:18+02:00] Plateau Summary: Agent Persistence Bug After Launch
+## [2025-04-22T02:55+02:00] Plateau Summary: Persistence Blocked by Supabase Schema Mismatch
 
-- **Blocker:**### Test Results & Current Findings (2025-04-22)
-- The test suite `tests/api/agents_lifecycle.test.ts` fails, but this is due to a known test harness limitation: Jest/Next.js/node-mocks-http do not persist singleton state (agentManager/orchestrator) between handler invocations.
-- This means POST then GET lifecycle tests will fail in this environment, even if persistence and hydration work in production.
-- Debug logging is now in place in production code for `AgentManager.deployAgent` and `saveAgentInfo`, so any real persistence issues will be visible in server logs.
+- **Blocker:** Agent persistence is still failing. Supabase upsert returns error `PGRST204: Could not find the 'deploymentStatus' column of 'agents_registry' in the schema cache`. This means the code is attempting to persist fields (`deploymentStatus`, `deploymentUrl`, `lastDeploymentError`) that do not exist in the Supabase table schema.
+- **Previous blocker (crashCount/camelCase mapping) is resolved**, but persistence is now blocked at the database schema level.
+- **Root Cause:** The Supabase table `agents_registry` is missing one or more columns required by the code. All persisted fields must exist in the DB schema, with matching names and types.
 
 ### Next Steps
-1. **Manual/E2E Verification**
-   - Launch a new agent via POST `/api/agents` or `/launch` on a running server.
-   - Observe logs for:
-     - `[AgentManager][deployAgent] Persisting agent info to Supabase for id=...`
-     - `Successfully persisted agent info...`
-     - Any `CRITICAL: Failed to persist agent to Supabase...` errors
-   - Use GET `/api/agents/{id}` and `/status` to confirm persistence and retrieval.
-2. **If Persistence Fails in Production**
-   - Double-check Supabase table schema: ensure `id` is PK/unique, types for `logs`/`config`/timestamps match expectations.
-   - Confirm Supabase RLS policies allow `insert`, `update`, `select` for the used key.
-   - Ensure `supabaseClient` is properly configured and credentials are valid.
-3. **If Agents Persist but Are Not Returned**
-   - Investigate `listAgentInfos` and `getAgentInfo` for retrieval/filtering bugs.
-   - Check for accidental mocking or caching in dev/prod environments.
+1. **Fix Supabase Schema**
+   - Add the missing columns to the `agents_registry` table:
+     - `deploymentStatus` (text or varchar)
+     - `deploymentUrl` (text or varchar, nullable)
+     - `lastDeploymentError` (text or varchar, nullable)
+   - Ensure all columns are named exactly as referenced in the code (case-sensitive).
+2. **Refresh Supabase Schema Cache**
+   - If using PostgREST or Supabase Studio, refresh/reload the schema cache after altering the table.
+3. **Retry Agent Persistence**
+   - Launch an agent via POST `/api/agents` or `/launch`.
+   - Check logs for successful upsert and absence of schema errors.
+4. **Verify Retrieval**
+   - Use GET `/api/agents/{id}` and `/status` to confirm the agent is persisted and retrievable.
 
 ### Additional Notes
-- The current test harness cannot reliably test agent lifecycle persistence due to singleton isolation.
-- For true coverage, use an E2E HTTP test with a real server or perform manual verification.
-- All changes are non-breaking and only increase error visibility.
-- Once persistence is confirmed in production, reduce log verbosity as appropriate.
+- All code and DB schema must be in sync for persistence to work. Any new fields added to the code must also be added to the Supabase table.
+- Test harness limitations remain: only E2E/manual verification can confirm persistence.
+- Once schema is fixed and persistence is confirmed, reduce log verbosity as appropriate.
 - Maintain PLAN.md with all findings and next steps.
 
 ## [2025-04-22T02:03+02:00] Plateau Summary: Agent Lifecycle & Singleton Registration Debugging

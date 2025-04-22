@@ -15,7 +15,7 @@ export async function saveAgentInfo(agent: AgentInfo): Promise<void> {
       config: agent.config,
       lastHeartbeat: agent.lastHeartbeat,
       lastActivity: agent.lastActivity,
-      crashCount: agent.crashCount,
+      crashcount: agent.crashCount, 
       deploymentStatus: agent.deploymentStatus,
       deploymentUrl: agent.deploymentUrl,
       lastDeploymentError: agent.lastDeploymentError,

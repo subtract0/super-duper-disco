@@ -8,7 +8,8 @@ export class Controller {
     try {
       switch (intent.kind) {
         case 'status': {
-          const s = this.orch.listAgents().map(a => `${a.id}: ${a.status}`).join('\n');
+          const agents = await this.orch.listAgents();
+          const s = agents.map(a => `${a.id}: ${a.status}`).join('\n');
           return `Live Agents:\n${s}`;
         }
         case 'stop':

@@ -1,6 +1,6 @@
 // src/orchestration/agentManager.ts
 
-export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered';
+export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered' | 'recovery_failed';
 
 import type { AgentLike } from './agents/BaseAgent';
 
@@ -153,14 +153,21 @@ export class AgentManager {
       const { saveAgentInfo } = await import('./agentRegistry');
       const agent = this.agents.get(id);
       if (agent) {
+        console.debug(`[AgentManager][deployAgent] Persisting agent info to Supabase for id=${id}:`, {
+          ...agent,
+          instance: undefined,
+        });
         await saveAgentInfo({
           ...agent,
           instance: undefined,
         });
+        console.debug(`[AgentManager][deployAgent] Successfully persisted agent info for id=${id}`);
+      } else {
+        console.warn(`[AgentManager][deployAgent] WARNING: saveAgentInfo not called because agent with id=${id} not found in map.`);
       }
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[AgentManager] Failed to persist agent to Supabase:', e);
+      console.error(`[AgentManager][deployAgent] CRITICAL: Failed to persist agent to Supabase for id=${id}:`, e);
     }
     // Keep logs in sync with instance
     this.syncAgentLogs(id);
@@ -277,19 +284,19 @@ export class AgentManager {
    * Returns an agent by ID. Checks in-memory map first, then persistent storage.
    * Supports stateless/serverless/E2E environments.
    */
-  async getAgentById(id: string): Promise<AgentInfo | null> {
+  async getAgentById(id: string): Promise<AgentInfo | undefined> {
     let info = this.agents.get(id);
     if (info) return info;
     try {
       const { getAgentInfo } = await import('./agentRegistry');
-      info = await getAgentInfo(id);
+      info = await getAgentInfo(id) ?? undefined;
       if (info) {
         this.agents.set(id, { ...info, instance: undefined });
         return info;
       }
-      return null;
+      return undefined;
     } catch (e) {
-      return null;
+      return undefined;
     }
   }
 

@@ -5,7 +5,7 @@ import type { AgentInfo } from './agentManager';
 const TABLE = 'agents_registry';
 
 export async function saveAgentInfo(agent: AgentInfo): Promise<void> {
-  await supabase.from(TABLE).upsert([
+  const { data, error } = await supabase.from(TABLE).upsert([
     {
       id: agent.id,
       name: agent.name,
@@ -21,6 +21,15 @@ export async function saveAgentInfo(agent: AgentInfo): Promise<void> {
       lastDeploymentError: agent.lastDeploymentError,
     },
   ], { onConflict: ['id'] });
+  if (error) {
+    console.error('[agentRegistry.saveAgentInfo] Supabase upsert error:', error, '\nAgent:', agent);
+    throw new Error(`[agentRegistry.saveAgentInfo] Supabase error: ${typeof error === 'object' && error.message ? error.message : JSON.stringify(error)} (Agent: ${JSON.stringify(agent)})`);
+  }
+  if (!data) {
+    console.warn('[agentRegistry.saveAgentInfo] Supabase upsert returned no data.', { agent });
+  } else {
+    console.debug('[agentRegistry.saveAgentInfo] Upserted agent:', agent.id, data);
+  }
 }
 
 export async function getAgentInfo(id: string): Promise<AgentInfo | null> {

@@ -3,7 +3,7 @@ import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 import { agentLogStore } from '../../src/orchestration/agentLogs';
 import { agentManager } from '../../src/orchestration/agentManagerSingleton';
 
-export default function handler(req: any, res: any) {
+export default async function handler(req: any, res: any) {
   // Fetch live orchestrator state
   const agents = orchestrator.listAgents();
   const health: Record<string, any> = {};
@@ -38,7 +38,7 @@ export default function handler(req: any, res: any) {
   logs = logs.sort((a: any, b: any) => b.timestamp - a.timestamp).slice(0, 50);
   // Expose the live message bus (A2A envelopes) for collaboration monitoring
   const messages = typeof orchestrator.getSwarmState === 'function'
-    ? (orchestrator.getSwarmState().messages || [])
+    ? ((await orchestrator.getSwarmState()).messages || [])
     : (orchestrator.messageBus || []);
   res.status(200).json({
     state: 'live',

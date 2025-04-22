@@ -5,6 +5,20 @@
 
 <!-- Only the most important and current ~150 lines are retained. Older entries have been archived in PLAN-past.md. -->
 
+## [2025-04-22T02:03+02:00] Plateau Summary: Agent Lifecycle & Singleton Registration Debugging
+
+- **Blocker:** Agents created via POST /api/agents are not immediately retrievable via GET /api/agents/{id} (404 bug confirmed by regression test).
+- Debug logging after agent creation is in place to aid diagnosis.
+- All test agent mocks must be EventEmitter-compatible (BaseAgent or similar) to prevent TypeError: agent.on is not a function.
+- Current focus is on auditing singleton usage and agent registration flow in orchestrator and agentManager.
+- Not infra/polyfill related; all OpenAI/LangChain usages are covered.
+- PLAN.md and test templates updated to enforce EventEmitter-compatible agent mocks as a regression-proof pattern.
+
+**Next Steps:**
+- Audit and debug singleton and agent registration flow.
+- Ensure all agent registration, retrieval, and deletion operations are consistent and reliable.
+- Maintain full traceability from bug discovery to resolution.
+
 ## [2025-04-22T00:15+02:00] Plateau Summary: Protocol Compliance Test Audit Complete
 
 - Audited all protocol compliance test suites: `agentOrchestrator.protocol.test.ts`, `multiAgentOrchestrator.protocol.test.ts`, and `multiAgentWorkflow.protocol.test.ts`.

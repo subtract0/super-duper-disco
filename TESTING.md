@@ -195,4 +195,33 @@ This document consolidates best practices, patterns, and insights gathered while
 
 ---
 
-*Document last updated: 2025-04-18*
+## Supabase Persistence Debugging & Agent Lifecycle Regression (2025-04-22)
+
+### Summary of Issue
+- Agents were not being persisted to Supabase after creation, causing `/status` and GET `/api/agents/{id}` to return empty or 404.
+- Root causes:
+  - **Schema mismatch:** Code referenced fields (e.g., `crashCount`, `deploymentStatus`, `lastActivity`) that did not exist in the Supabase table, or used camelCase when the DB expected lowercase/snake_case.
+  - **Test harness isolation:** Jest/Next.js/node-mocks-http do not persist singleton state between handler invocations, so POST/GET lifecycle tests failed even when persistence worked in prod.
+
+### Solution
+- **Explicit mapping:** All properties are mapped at the persistence boundary (e.g., `crashCount` in code → `crashcount` in DB).
+- **Schema update:** All missing columns were added to Supabase with correct names and types:
+  - `crashcount` (integer)
+  - `deploymentStatus` (text)
+  - `deploymentUrl` (text)
+  - `lastDeploymentError` (text)
+  - `lastActivity` (bigint)
+  - ...and others as required
+- **Guideline:** Always keep code and DB schema in sync, especially when adding new agent fields.
+
+### Regression Test
+- A regression test (`agents_lifecycle.test.ts`) verifies:
+  - Agents created via POST `/api/agents` can be retrieved by GET `/api/agents/{id}`
+  - Agents can be deleted and are no longer retrievable
+- **Limitation:** In-memory test harnesses do not persist singleton state; only E2E/manual verification can confirm persistence.
+
+### E2E/Manual Verification
+- After fixing the schema, launching an agent via `/launch` and checking `/status` confirmed agents are now persisted and retrievable.
+- Logs show successful upsert and agent listing.
+
+*Document last updated: 2025-04-22*

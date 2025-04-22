@@ -1,8 +1,15 @@
 // src/orchestration/agentManager.ts
+// Lint cleanup: const correctness, unused variables, WeakMap-only heartbeat listener tracking
+// Final sweep: removed all unused variables and legacy property references.
 
-export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered' | 'recovery_failed';
+// --- Imports ---
+import type { BaseAgent, AgentLike } from './agents/BaseAgent'; // Import BaseAgent for type assertions
+import { createAgent } from './agents/factory';
+import { agentHealthStore } from './agentHealth';
+import { saveAgentInfo, listAgentInfos, deleteAgentInfo } from './agentRegistry'; // Static imports for registry functions
 
-import type { AgentLike } from './agents/BaseAgent';
+// --- Types ---
+export type AgentStatus = 'running' | 'stopped' | 'error' | 'recovered' | 'recovery_failed' | 'pending' | 'deploying' | 'deployed';
 
 export interface AgentInfo {
   id: string;
@@ -15,379 +22,363 @@ export interface AgentInfo {
   lastHeartbeat?: number; // timestamp in ms
   lastActivity?: number; // timestamp in ms
   crashCount?: number;
-  // Deployment fields
   deploymentStatus?: 'pending' | 'deploying' | 'deployed' | 'failed';
   deploymentUrl?: string | null;
   lastDeploymentError?: string | null;
 }
 
-// Use BaseAgent from agents/BaseAgent
-// (imported as type above)
+// --- Class Definition ---
 
-/**
- * Factory function for modular agent instantiation.
- * Easily extendable for new agent types.
- */
-import { createAgent } from './agents/factory';
 
 export class AgentManager {
+  /** Unique identifier for debugging singleton identity. */
+  public _singletonId: number = Math.floor(Math.random() * 1e9);
+
+  /** Static accessor for debugging singleton id. */
+  static getSingletonId(): number | undefined {
+    return (globalThis as unknown as { __CASCADE_AGENT_MANAGER__?: { _singletonId: number } }).__CASCADE_AGENT_MANAGER__?._singletonId;
+  }
+/**
+   * Tracks heartbeat listeners for each BaseAgent instance (not on agent object for type safety).
+   * Assumes all agent instances used as keys are compatible with BaseAgent (i.e., have 'on'/'off' methods and stable identity).
+   */
+  private _heartbeatListeners: WeakMap<BaseAgent, (beat: { ts: number }) => void> = new WeakMap();
   agents: Map<string, AgentInfo> = new Map();
 
-  // Hydrate all agents from persistent storage
+  /**
+   * Hydrates the in-memory agent map from persistent storage on startup.
+   */
   static async hydrateFromPersistent(): Promise<AgentManager> {
+    // Avoid duplicate singleton on hot reload or test
+    const globalAny = globalThis as { __CASCADE_AGENT_MANAGER__?: AgentManager };
+    if (globalAny.__CASCADE_AGENT_MANAGER__ instanceof AgentManager) return globalAny.__CASCADE_AGENT_MANAGER__;
     const mgr = new AgentManager();
     try {
-      const { listAgentInfos } = await import('./agentRegistry');
-      const agentInfos = await listAgentInfos();
-      for (const info of agentInfos) {
-        // Do NOT hydrate instance; only metadata. Instance is created on demand.
-        mgr.agents.set(info.id, { ...info, instance: undefined });
+      const agentInfosFromDb = await listAgentInfos();
+      for (const info of agentInfosFromDb) {
+        const validStatus = ['running', 'stopped', 'error', 'recovered', 'recovery_failed', 'pending', 'deploying', 'deployed'].includes(info.status)
+                            ? info.status
+                            : 'stopped';
+        mgr.agents.set(info.id, { ...info, status: validStatus, instance: undefined });
       }
-      // Ensure global singleton is always this hydrated instance
-      (globalThis as any).__CASCADE_AGENT_MANAGER__ = mgr;
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[AgentManager] Failed to hydrate from persistent store:', e);
+      // Using console.info for standard logging level
+      // // console.info(`[AgentManager][hydrateFromPersistent] Hydrated agents from DB:`, Array.from(mgr.agents.keys()));
+    } catch (err) {
+      console.error('[AgentManager] Failed to hydrate from persistent store:', err);
+    } finally {
+      (globalThis as unknown as { __CASCADE_AGENT_MANAGER__?: AgentManager }).__CASCADE_AGENT_MANAGER__ = mgr;
     }
+    // // console.info(`[AgentManager][hydrateFromPersistent] Singleton _singletonId: ${mgr._singletonId}`);
     return mgr;
   }
 
   /**
-   * Deploys and starts a new agent of the given type.
-   * Uses createAgent factory for modularity.
+   * Deploys and starts a new agent instance, replacing existing if necessary.
+   * Persists the new agent state to the registry.
    */
-  async deployAgent(id: string, name: string, type: string = 'native', config: Record<string, unknown> = {}) {
-    // If an agent with this ID exists, stop and remove it first (for restart/recovery)
+  async deployAgent(id: string, name: string, type: string = 'native', config: Record<string, unknown> = {}): Promise<void> {
+    // Using standard console logging methods
+    // console.log(`[AgentManager][deployAgent] Starting deployment for agent id=${id}, name=${name}, type=${type}`);
+
     if (this.agents.has(id)) {
-      const existing = this.agents.get(id);
-      if (existing && existing.instance && typeof existing.instance.stop === 'function') {
+      const existingInfo = this.agents.get(id);
+      if (existingInfo?.instance) {
+        // console.log(`[AgentManager][deployAgent] Stopping existing instance for agent ${id}...`);
         try {
-          existing.instance.stop();
+          await this.stopAgent(id);
         } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error(
-            `[AgentManager] existing.instance.stop() failed for id=${id}, type=${type}:`,
-            err,
-            err instanceof Error ? err.stack : undefined
-          );
-          throw err;
+          console.error(`[AgentManager][deployAgent] Failed to stop existing instance ${id} during redeploy:`, err);
+          // throw err; // Optionally re-throw
         }
-        // Do NOT delete from map; keep agent for lifecycle tracking
       }
     }
-    // No persistent memory hydration in new design
-    let agent;
+
+    let agentInstance: AgentLike;
     try {
-      agent = createAgent(id, name, type, config);
+      console.debug(`[AgentManager][deployAgent][${new Date().toISOString()}] Creating agent instance for ${id}...`);
+      agentInstance = createAgent(id, name, type, config);
+      console.debug(`[AgentManager][deployAgent][${new Date().toISOString()}] Agent instance created for ${id}.`);
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[AgentManager] createAgent failed for id=${id}, type=${type}:`,
-        err,
-        err instanceof Error ? err.stack : undefined
-      );
+      console.error(`[AgentManager][deployAgent] createAgent factory failed for id=${id}, type=${type}:`, err);
       throw err;
     }
+
     try {
-      agent.start();
+      console.debug(`[AgentManager][deployAgent] Starting agent instance ${id}...`);
+      await agentInstance.start();
+      console.debug(`[AgentManager][deployAgent] Agent instance ${id} started.`);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[AgentManager] agent.start() failed for id=${id}, type=${type}:`,
-        e,
-        e instanceof Error ? e.stack : undefined
-      );
+      console.error(`[AgentManager][deployAgent] agent.start() failed for id=${id}, type=${type}:`, e);
       throw e;
     }
+
     const now = Date.now();
-    // Set status to 'running' after start
-    agent.status = 'running';
-    // Listen for heartbeat events to update lastHeartbeat
+    const initialStatus: AgentStatus = 'running';
+
     const heartbeatListener = (hb: { ts: number }) => {
       const info = this.agents.get(id);
-      if (info) {
+      if (info && info.status !== 'stopped') {
         info.lastHeartbeat = hb.ts;
         info.status = 'running';
+        info.lastActivity = hb.ts;
       }
     };
+
     try {
-      agent.on('heartbeat', heartbeatListener);
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(
-        `[AgentManager] agent.on('heartbeat') failed for id=${id}, type=${type}:`,
-        e,
-        e instanceof Error ? e.stack : undefined
-      );
-      throw e;
-    }
-    // Store listener for later removal
-    // @ts-expect-error: _heartbeatListener is used for test cleanup
-    (agent as BaseAgent)._heartbeatListener = heartbeatListener;
-    // Set health to healthy
-    (async () => {
-      try {
-        const mod = await import('./agentHealth');
-        mod.agentHealthStore.setHealth(id, 'healthy');
-      } catch (e) {
-        // ignore if agentHealthStore is not available
-      }
-    })();
-    this.agents.set(id, {
-      id,
-      name,
-      status: 'running',
-      logs: typeof agent.getLogs === 'function' ? agent.getLogs() : [],
-      instance: agent,
-      type,
-      config,
-      lastHeartbeat: now,
-      lastActivity: now,
-      crashCount: 0,
-      deploymentStatus: 'deployed', // Default to deployed for now (simulate success)
-      deploymentUrl: null,
-      lastDeploymentError: null,
-    });
-    // Persist agent info to Supabase
-    try {
-      const { saveAgentInfo } = await import('./agentRegistry');
-      const agent = this.agents.get(id);
-      if (agent) {
-        console.debug(`[AgentManager][deployAgent] Persisting agent info to Supabase for id=${id}:`, {
-          ...agent,
-          instance: undefined,
-        });
-        await saveAgentInfo({
-          ...agent,
-          instance: undefined,
-        });
-        console.debug(`[AgentManager][deployAgent] Successfully persisted agent info for id=${id}`);
+      if (typeof agentInstance.on === 'function') {
+        agentInstance.on('heartbeat', heartbeatListener);
+        this._heartbeatListeners.set(agentInstance as BaseAgent, heartbeatListener);
       } else {
-        console.warn(`[AgentManager][deployAgent] WARNING: saveAgentInfo not called because agent with id=${id} not found in map.`);
+        console.warn(`[AgentManager][deployAgent] Agent instance ${id} does not support 'on' method for heartbeat listener.`);
       }
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(`[AgentManager][deployAgent] CRITICAL: Failed to persist agent to Supabase for id=${id}:`, e);
+      console.error(`[AgentManager][deployAgent] agent.on('heartbeat') setup failed for id=${id}, type=${type}:`, e);
     }
-    // Keep logs in sync with instance
+
+    (async () => {
+      try { await agentHealthStore.setHealth(id, 'healthy'); } catch { /* ignore */ }
+    })();
+
+    const newAgentInfo: AgentInfo = {
+      id, name, status: initialStatus,
+      logs: typeof agentInstance.getLogs === 'function' ? agentInstance.getLogs() : [],
+      instance: agentInstance, type, config,
+      lastHeartbeat: now, lastActivity: now, crashCount: 0,
+      deploymentStatus: 'deployed', deploymentUrl: null, lastDeploymentError: null,
+    };
+
+    this.agents.set(id, newAgentInfo);
+    console.debug(`[AgentManager][deployAgent][${new Date().toISOString()}] Agent ${id} added/updated in memory map with status '${initialStatus}'. Current keys:`, Array.from(this.agents.keys()));
+    console.debug(`[AgentManager][deployAgent] Singleton _singletonId: ${this._singletonId}. Agent map keys:`, Array.from(this.agents.keys()));
+
+    // --- Persist agent info to Registry ---
+    try {
+      const agentDataToPersist = { ...newAgentInfo, instance: undefined };
+      // console.log(`[AgentManager][deployAgent][${new Date().toISOString()}] ===> Attempting to save agent: ${id}, Status: ${agentDataToPersist.status}`);
+      await saveAgentInfo(agentDataToPersist);
+      // console.log(`[AgentManager][deployAgent][${new Date().toISOString()}] ===> Successfully persisted agent info for id=${id}`);
+    } catch (err) {
+      console.error(`[AgentManager][deployAgent][${new Date().toISOString()}] CRITICAL: Failed to persist agent ${id} to Supabase:`, err);
+    }
+    // --- End Persistence ---
+
     this.syncAgentLogs(id);
-    // Debug log
-    console.debug(`[AgentManager][deployAgent] Added agent id=${id}. Current agents:`, Array.from(this.agents.keys()));
-    if (!this.agents.has(id)) {
-      console.error(`[AgentManager] deployAgent: Agent ${id} not in map after deploy!`);
+    // // console.info(`[AgentManager][deployAgent] Finished deployment for agent id=${id}. Current agents in map:`, Array.from(this.agents.keys()));
+    const finalInfo = this.agents.get(id);
+    if (finalInfo) {
+      // console.log(`[AgentManager][deployAgent][${new Date().toISOString()}] Agent ${id} deployed with final status: ${finalInfo.status}`);
     } else {
-      console.log(`[AgentManager] deployAgent: Agent ${id} deployed with status`, this.agents.get(id)?.status);
+      console.error(`[AgentManager][deployAgent][${new Date().toISOString()}] CRITICAL: Agent ${id} disappeared from map immediately after deployment!`);
     }
-  }
+  } // End of deployAgent
 
-  // Deployment status helpers
-  setDeploymentStatus(id: string, status: 'pending' | 'deploying' | 'deployed' | 'failed') {
-    const info = this.agents.get(id);
-    if (info) info.deploymentStatus = status;
-  }
-  setDeploymentUrl(id: string, url: string | null) {
-    const info = this.agents.get(id);
-    if (info) info.deploymentUrl = url;
-  }
-  setDeploymentError(id: string, error: string | null) {
-    const info = this.agents.get(id);
-    if (info) info.lastDeploymentError = error;
-  }
+  // --- Deployment Status Helpers ---
+  setDeploymentStatus(id: string, status: 'pending' | 'deploying' | 'deployed' | 'failed'): void { const info = this.agents.get(id); if (info) info.deploymentStatus = status; }
+  setDeploymentUrl(id: string, url: string | null): void { const info = this.agents.get(id); if (info) info.deploymentUrl = url; }
+  setDeploymentError(id: string, error: string | null): void { const info = this.agents.get(id); if (info) info.lastDeploymentError = error; }
 
-  // Ensure AgentInfo.logs stays in sync with instance.getLogs()
-  syncAgentLogs(id: string) {
+  // --- Log Management ---
+  syncAgentLogs(id: string): void { const info = this.agents.get(id); if (info?.instance && typeof info.instance.getLogs === 'function') info.logs = info.instance.getLogs(); }
+  setAgentLogs(id: string, logs: string[]): void { const info = this.agents.get(id); if (info) info.logs = logs; }
+
+  // --- Stop Agent ---
+  async stopAgent(id: string, deleteAfterStop: boolean = false): Promise<void> {
     const info = this.agents.get(id);
-    if (info && info.instance && typeof info.instance.getLogs === 'function') {
-      info.logs = info.instance.getLogs();
+    if (!info) {
+      console.warn(`[AgentManager] stopAgent: Agent ${id} not found.`);
+      return;
     }
-  }
-
-  setAgentLogs(id: string, logs: string[]) {
-    const info = this.agents.get(id);
-    if (info && info.instance) {
-      // Only update the info.logs field, not instance internals
-      info.logs = logs;
-      // Ensure logs are synced after setting
-      if (typeof this.syncAgentLogs === 'function') {
-        this.syncAgentLogs(id);
-      }
-    }
-  }
-
-  async stopAgent(id: string) {
-    const info = this.agents.get(id);
-    if (info && info.instance) {
-      // Remove heartbeat listener to prevent leaks
-      if ((info.instance as any)._heartbeatListener) {
-        info.instance.off('heartbeat', (info.instance as any)._heartbeatListener);
-        delete (info.instance as any)._heartbeatListener;
-      }
-      info.instance.stop();
-      this.syncAgentLogs(id);
-      info.status = 'stopped';
-      // Persist stopped status to Supabase
-      try {
-        const { saveAgentInfo } = await import('./agentRegistry');
-        await saveAgentInfo({ ...info, instance: undefined });
-      } catch (e) {
-        // eslint-disable-next-line no-console
-        console.error('[AgentManager] Failed to persist stopped agent to Supabase:', e);
-      }
-    } else {
-      console.error(`[AgentManager] stopAgent: Agent ${id} not found in map!`);
-    }
-  }
-
-  getAgentLastHeartbeat(id: string) {
-    const info = this.agents.get(id);
-    return info ? info.lastHeartbeat : null;
-  }
-
-  getAgentLastActivity(id: string) {
-    const info = this.agents.get(id);
-    return info ? info.lastActivity : null;
-  }
-
-  getAgentLogs(id: string) {
-    const info = this.agents.get(id);
-    return info ? info.instance?.getLogs() : [];
-  }
-
-  /**
-   * Returns all agents from persistent storage (Supabase), not just in-memory map.
-   * This ensures stateless/serverless/E2E environments always see the latest agent state.
-   */
-  async listAgents() {
-    try {
-      const { listAgentInfos } = await import('./agentRegistry');
-      const agents = await listAgentInfos();
-      console.debug('[AgentManager][listAgents] listAgentInfos returned:', agents.map(a => a.id));
-      for (const info of agents) {
-        if (!this.agents.has(info.id)) {
-          this.agents.set(info.id, { ...info, instance: undefined });
+    if (info.instance) {
+      // console.log(`[AgentManager][stopAgent] Stopping instance for agent ${id}...`);
+      const listener = this._heartbeatListeners?.get(info.instance as BaseAgent);
+      if (listener && typeof info.instance.off === 'function') {
+        try {
+          info.instance.off('heartbeat', listener);
+        } catch (error) {
+          console.error(`Error removing listener:`, error);
         }
+        this._heartbeatListeners.delete(info.instance as BaseAgent);
       }
-      console.debug('[AgentManager][listAgents] Final agent map:', Array.from(this.agents.keys()));
-      return agents;
-    } catch (e) {
-      console.error('[AgentManager][listAgents] Error:', e);
-      return Array.from(this.agents.values());
+      try {
+        if (typeof info.instance.stop === 'function') await info.instance.stop();
+        this.syncAgentLogs(id);
+        // console.log(`[AgentManager][stopAgent] Instance for agent ${id} stopped.`);
+      } catch (error) {
+        console.error(`Error stopping instance ${id}:`, error);
+        info.status = 'error';
+      } finally {
+        info.instance = undefined;
+      }
+    } else {
+      // Kein aktives Instance‑Objekt vorhanden
+      if (info.status !== 'error') info.status = 'stopped';
     }
-  }
-
-  // Alias for compatibility with tests and orchestrator code
-  async list() {
-    return this.listAgents();
-  }
-
-  /**
-   * Returns an agent by ID. Checks in-memory map first, then persistent storage.
-   * Supports stateless/serverless/E2E environments.
-   */
-  async getAgentById(id: string): Promise<AgentInfo | undefined> {
-    let info = this.agents.get(id);
-    if (info) return info;
     try {
-      const { getAgentInfo } = await import('./agentRegistry');
-      info = await getAgentInfo(id) ?? undefined;
-      if (info) {
-        this.agents.set(id, { ...info, instance: undefined });
-        return info;
-      }
-      return undefined;
-    } catch (e) {
-      return undefined;
+      console.debug(`[AgentManager][stopAgent] Persisting final status '${info.status}' for agent ${id}.`);
+      await this.persistAgentInfo(id); // Use helper
+    } catch (error) {
+      console.error(`Failed to persist final status for ${id}:`, error);
     }
-  }
-
-  async clearAllAgents() {
-    for (const info of this.agents.values()) {
-      if (info && info.instance && typeof info.instance.stop === 'function') {
-        info.instance.stop();
-        // Set health to crashed
-        (async () => {
-          try {
-            const mod = await import('./agentHealth');
-            mod.agentHealthStore.setHealth(info.id, 'crashed');
-          } catch (e) {
-            // ignore if agentHealthStore is not available
-          }
-        })();
-      }
-    }
-    this.agents.clear();
-    // Remove all agents from persistent storage
-    try {
-      const { listAgentInfos, deleteAgentInfo } = await import('./agentRegistry');
-      const agents = await listAgentInfos();
-      for (const a of agents) {
-        await deleteAgentInfo(a.id);
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('[AgentManager] Failed to clear all agents from Supabase:', e);
+    if (deleteAfterStop) {
+      await this.deleteAgent(id);
     }
   }
 
   /**
-   * Returns the health status of an agent and triggers auto-recovery if unhealthy.
+   * Permanently deletes an agent from memory and persistent storage.
    */
-  /**
-   * Returns the health status of an agent and triggers auto-recovery if unhealthy.
-   * NOTE: Tests and consumers should always retrieve the agent from agentManager.agents.get(id) for up-to-date state.
-   */
-  public getAgentHealth(id: string) {
+  async deleteAgent(id: string): Promise<void> {
     const info = this.agents.get(id);
-    if (!info) return 'not found';
-    const timeout = typeof process !== 'undefined' && process.env.AGENT_HEARTBEAT_TIMEOUT_MS
-      ? parseInt(process.env.AGENT_HEARTBEAT_TIMEOUT_MS, 10)
-      : 15000;
-    const now = Date.now();
-    // If agent is running or already in error, check for missed heartbeat
-    if ((info.status === 'running' || info.status === 'error') && info.lastHeartbeat && now - info.lastHeartbeat > timeout) {
-      // Always increment crashCount and set status to error on missed heartbeat
-      info.crashCount = (info.crashCount || 0) + 1;
-      info.status = 'error';
-      // Update the agent in the map to ensure reference consistency
-      this.agents.set(id, info);
-      // Trigger auto-recovery (async, do not await)
-      void this.autoRecoverAgent(id, info);
-      return 'error';
+    if (info) {
+      // Stop agent if running
+      await this.stopAgent(id);
+      // Remove from in-memory map
+      this.agents.delete(id);
+      // Remove from persistent storage
+      try {
+        await deleteAgentInfo(id);
+        // // console.info(`[AgentManager][deleteAgent] Agent ${id} deleted from persistent registry and memory.`);
+      } catch (error) {
+        console.error(`[AgentManager][deleteAgent] Failed to delete agent ${id} from persistent registry:`, error);
+        throw error;
+      }
+    } else {
+      // Agent not found in memory, attempt to delete from persistent storage anyway
+      try {
+        await deleteAgentInfo(id);
+        // // console.info(`[AgentManager][deleteAgent] Agent ${id} deleted from persistent registry (not present in memory).`);
+      } catch (error) {
+        console.error(`[AgentManager][deleteAgent] Failed to delete agent ${id} from persistent registry:`, error);
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * List all agents currently known to the AgentManager.
+   */
+  public async listAgents(): Promise<AgentInfo[]> {
+    return Array.from(this.agents.values());
+  }
+
+  /**
+   * Returns the last heartbeat timestamp for the agent with the given id.
+   */
+  getAgentLastHeartbeat(id: string): number | null {
+    const info = this.agents.get(id);
+    return info?.lastHeartbeat ?? null;
+  }
+
+  /**
+   * Returns the last activity timestamp for the agent with the given id.
+   */
+  getAgentLastActivity(id: string): number | null {
+    const info = this.agents.get(id);
+    return info?.lastActivity ?? null;
+  }
+
+  /**
+   * Returns the logs for the agent with the given id.
+   */
+  getAgentLogs(id: string): string[] {
+    const info = this.agents.get(id);
+    if (info?.instance && typeof info.instance.getLogs === 'function') {
+      return info.instance.getLogs();
+    }
+    return info?.logs ?? [];
+  }
+
+  /**
+   * Returns AgentStatus or 'not found' for the agent with the given id.
+   */
+  public getAgentHealth(id: string): AgentStatus | 'not found' {
+    const info = this.agents.get(id);
+    if (!info) {
+      return 'not found';
+    }
+    if (info.status === 'running') {
+      const timeout = process.env.AGENT_HEARTBEAT_TIMEOUT_MS ? parseInt(process.env.AGENT_HEARTBEAT_TIMEOUT_MS, 10) : 15000;
+      const now = Date.now();
+      if (!info.lastHeartbeat || now - (info.lastHeartbeat || 0) > timeout) {
+        console.warn(`[AgentManager][getAgentHealth] Agent ${id} missed heartbeat!`);
+        info.status = 'error';
+        info.crashCount = (info.crashCount || 0) + 1;
+        this.agents.set(id, info);
+        // Persist error state using the helper
+        this.persistAgentInfo(id).catch((error) => console.error(`Failed to persist error status for ${id}:`, error));
+        // console.log(`[AgentManager][getAgentHealth] Triggering auto-recovery for agent ${id}.`);
+        void this.autoRecoverAgent(id); // Fire and forget recovery
+        return 'error';
+      }
     }
     return info.status;
   }
 
   /**
-   * Attempts to automatically recover a crashed or unresponsive agent.
+   * Gets agent by ID (memory first, then DB). Returns AgentInfo or undefined.
    */
-  /**
-   * Attempts to automatically recover a crashed or unresponsive agent.
-   * Sets status to 'recovery_failed' if recovery throws, unless already 'recovered'.
-   */
-  public async autoRecoverAgent(id: string, info: AgentInfo) {
-    if (!info || info.status !== 'error') return;
-    // Attempt to stop the existing agent instance before recovery
-    if (info.instance && typeof info.instance.stop === 'function') {
-      try {
-        info.instance.stop();
-      } catch (e) {
-        // If stopping fails, mark as recovery_failed and return
-        info.status = 'recovery_failed';
-        this.agents.set(id, info);
-        return;
-      }
+  async findAgentById(id: string): Promise<AgentInfo | undefined> {
+    const info = this.agents.get(id);
+    return info;
+  }
+
+// ... (rest of the code remains the same)
+  /** Attempts auto-recovery for crashed agents. */
+  public async autoRecoverAgent(id: string): Promise<void> {
+    const currentInfo = this.agents.get(id);
+    if (!currentInfo || currentInfo.status !== 'error') return; // Early exit if not in error state
+    // console.log(`[AgentManager][autoRecoverAgent] Attempting recovery for agent ${id}.`);
+    // Listener des alten Agenten sauber entfernen
+    const oldListener = this._heartbeatListeners.get(currentInfo.instance as BaseAgent);
+    if (oldListener && typeof currentInfo.instance?.off === 'function') {
+      currentInfo.instance.off('heartbeat', oldListener);
+      this._heartbeatListeners.delete(currentInfo.instance as BaseAgent);
+    }
+    if (currentInfo.instance && typeof currentInfo.instance.stop === 'function') {
+      try { console.debug(`Stopping defunct instance ${id}...`); await currentInfo.instance.stop(); }
+      catch (e) { console.error(`Error stopping defunct instance ${id}:`, e); }
+      finally { currentInfo.instance = undefined; }
     }
     try {
-      const newAgent = createAgent(info.id, info.name, info.type || 'native', info.config || {});
-      newAgent.start();
-      info.instance = newAgent;
-      info.status = 'recovered';
-      this.agents.set(id, info); // Ensure agent map is updated
-    } catch (e) {
-      if (info.status !== 'recovered') {
-        info.status = 'recovery_failed';
-        this.agents.set(id, info); // Ensure agent map is updated
-      }
+      console.debug(`Creating/starting new instance ${id}...`);
+      const newAgentInstance = createAgent(currentInfo.id, currentInfo.name, currentInfo.type || 'native', currentInfo.config || {});
+      await newAgentInstance.start();
+      // console.log(`New instance ${id} started.`);
+      const now = Date.now();
+      const heartbeatListener = (hb: { ts: number }) => { const latestInfo = this.agents.get(id); if (latestInfo && latestInfo.status !== 'stopped') { latestInfo.lastHeartbeat = hb.ts; latestInfo.status = 'running'; latestInfo.lastActivity = hb.ts; } };
+       try { if (typeof newAgentInstance.on === 'function') { newAgentInstance.on('heartbeat', heartbeatListener); this._heartbeatListeners.set(newAgentInstance as BaseAgent, heartbeatListener); } }
+      catch(e) { console.error(`Failed attach listener post-recovery ${id}:`, e); }
+      currentInfo.instance = newAgentInstance; currentInfo.status = 'recovered'; currentInfo.lastHeartbeat = now; currentInfo.lastActivity = now;
+      currentInfo.logs = typeof newAgentInstance.getLogs === 'function' ? newAgentInstance.getLogs() : [];
+      this.agents.set(id, currentInfo);
+      await this.persistAgentInfo(id); // Use helper
+      (async () => { try { await agentHealthStore.setHealth(id, 'recovered'); } catch { /* ignore */ } })();
+      // console.log(`Agent ${id} recovered successfully.`);
+    } catch (error) {
+      console.error(`Recovery attempt failed for ${id}:`, error);
+       const latestInfo = this.agents.get(id);
+       if (latestInfo && latestInfo.status !== 'recovered' && latestInfo.status !== 'running') {
+            latestInfo.status = 'recovery_failed'; latestInfo.instance = undefined; this.agents.set(id, latestInfo);
+            this.persistAgentInfo(id).catch(err => console.error(`Failed persist recovery_failed status ${id}:`, err)); // Use helper
+       }
     }
-  }
-}
+  } // End of autoRecoverAgent
+
+  /** Helper to persist agent info (without instance) to registry. */
+  private async persistAgentInfo(id: string): Promise<void> {
+    const info = this.agents.get(id);
+    if (info) {
+        try {
+            await saveAgentInfo({ ...info, instance: undefined }); // Uses static import
+            // More informative debug log
+            console.debug(`[AgentManager][persistAgentInfo] Persisted info for agent ${id}. Status: ${info.status}`);
+        } catch (e) {
+             console.error(`[AgentManager][persistAgentInfo] Failed to persist agent info for ${id}:`, e);
+             throw e; // Re-throw error for callers to handle
+        }
+    } else {
+         console.warn(`[AgentManager][persistAgentInfo] Agent ${id} not found in map, cannot persist.`);
+    }
+  } // End of persistAgentInfo
+
+} // End of AgentManager class

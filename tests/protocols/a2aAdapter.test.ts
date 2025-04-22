@@ -23,7 +23,7 @@ describe('A2A Protocol Adapter', () => {
 
   it('should parse a valid A2A envelope', () => {
     const envelope = buildA2AEnvelope({
-      type: 'test',
+      type: 'test-type',
       from: 'a',
       to: 'b',
       body: 'hi',

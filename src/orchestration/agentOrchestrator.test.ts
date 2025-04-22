@@ -15,12 +15,14 @@ import { OrchestratedAgent } from './agentOrchestrator';
 
 describe('AgentOrchestrator', () => {
   beforeEach(async () => {
-    await agentManager.clearAllAgents();
+    // No clearAllAgents method on agentManager; ensure clean state by stopping agents if needed.
+    // If you want to clear agents, implement a helper or mock as needed.
   });
 
   test('should launch a real agent and reflect health', async () => {
     const agentConfig: OrchestratedAgent = {
       id: 'orch-agent-1',
+      name: 'orch-agent-1',
       type: 'test-type',
       status: 'pending',
       host: 'localhost',
@@ -28,7 +30,8 @@ describe('AgentOrchestrator', () => {
     };
     await orchestrator.launchAgent(agentConfig);
     // Should be running in agentManager
-    const agentInfo = agentManager.listAgents().find((a) => a.id === agentConfig.id);
+    const agentList = await agentManager.listAgents();
+    const agentInfo = agentList.find((a) => a.id === agentConfig.id);
     expect(agentInfo).toBeDefined();
     expect(agentInfo!.status).toBe('running');
     // Orchestrator health should be healthy
@@ -38,6 +41,7 @@ describe('AgentOrchestrator', () => {
   test('should stop a real agent and reflect health', async () => {
     const agentConfig: OrchestratedAgent = {
       id: 'orch-agent-2',
+      name: 'orch-agent-2',
       type: 'test-type',
       status: 'pending',
       host: 'localhost',
@@ -45,7 +49,8 @@ describe('AgentOrchestrator', () => {
     };
     await orchestrator.launchAgent(agentConfig);
     await orchestrator.stopAgent(agentConfig.id);
-    const agentInfo = agentManager.listAgents().find((a) => a.id === agentConfig.id);
+    const agentList = await agentManager.listAgents();
+    const agentInfo = agentList.find((a) => a.id === agentConfig.id);
     expect(agentInfo).toBeDefined();
     expect(agentInfo!.status).toBe('stopped');
     // Orchestrator health should be crashed
@@ -55,22 +60,25 @@ describe('AgentOrchestrator', () => {
   test('should list all orchestrated agents', async () => {
     const agentConfig: OrchestratedAgent = {
       id: 'orch-agent-3',
+      name: 'orch-agent-3',
       type: 'test-type',
       status: 'pending',
       host: 'localhost',
       config: {},
     };
     await orchestrator.launchAgent(agentConfig);
-    const agents = orchestrator.listAgents();
+    const agents = await orchestrator.listAgents();
     expect(agents.some((a) => a.id === agentConfig.id)).toBe(true);
   });
 
 
   test('should auto-recover a crashed agent and reflect live state', async () => {
     // DEBUG: Log agent list before launch
-    console.log('Before launch:', orchestrator.listAgents());
+    const agentsBefore = await orchestrator.listAgents();
+    console.log('Before launch:', agentsBefore);
     const agentConfig: OrchestratedAgent = {
       id: 'orch-agent-crash-1',
+      name: 'orch-agent-crash-1',
       type: 'test-type',
       status: 'pending',
       host: 'localhost',
@@ -84,12 +92,13 @@ describe('AgentOrchestrator', () => {
     // Now trigger orchestrator auto-recovery
     const recoveryResult = await orchestrator.restartAgent(agentConfig.id);
     // DEBUG: Log agent list after restart
-    console.log('After restart:', orchestrator.listAgents());
+    const agentsAfter = await orchestrator.listAgents();
+    console.log('After restart:', agentsAfter);
     expect(recoveryResult).toBe('recovered');
     // Health should now be 'recovered'
     expect(orchestrator.getHealth(agentConfig.id)).toBe('recovered');
     // Check agent is still present in orchestrator list
-    const agents = orchestrator.listAgents();
+    const agents = await orchestrator.listAgents();
     expect(agents.some((a) => a.id === agentConfig.id)).toBe(true);
   });
 });

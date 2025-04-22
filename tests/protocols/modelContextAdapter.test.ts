@@ -4,7 +4,7 @@ describe('Model Context Protocol Adapter', () => {
   it('should build a valid model context object', () => {
     const ctx = buildModelContext({
       id: 'ctx1',
-      type: 'test',
+      type: 'test-type',
       version: '1',
       value: { foo: 'bar' },
       provenance: 'unit-test',
@@ -23,7 +23,7 @@ describe('Model Context Protocol Adapter', () => {
   it('should update a model context object', () => {
     const ctx = buildModelContext({
       id: 'ctx2',
-      type: 'test',
+      type: 'test-type',
       version: '1',
       value: { foo: 'bar' },
     });
@@ -36,7 +36,7 @@ describe('Model Context Protocol Adapter', () => {
   it('should validate a correct model context object', () => {
     const ctx = buildModelContext({
       id: 'ctx3',
-      type: 'test',
+      type: 'test-type',
       version: '1',
       value: {},
     });

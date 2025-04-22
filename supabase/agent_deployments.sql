@@ -12,3 +12,11 @@ CREATE TABLE IF NOT EXISTS public.agent_deployments (
 
 -- Index for fast lookup by agent_id
 CREATE INDEX IF NOT EXISTS idx_agent_deployments_agent_id ON public.agent_deployments(agent_id);
+
+-- Protocol extension: add missing fields for orchestration/LLM agent support
+ALTER TABLE public.agent_deployments
+  ADD COLUMN IF NOT EXISTS deployment_status text,
+  ADD COLUMN IF NOT EXISTS deployment_url text,
+  ADD COLUMN IF NOT EXISTS last_deployment_error text,
+  ADD COLUMN IF NOT EXISTS last_activity timestamptz,
+  ADD COLUMN IF NOT EXISTS crash_count integer DEFAULT 0;

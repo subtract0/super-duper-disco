@@ -6,21 +6,17 @@ const globalKey = '__CASCADE_AGENT_MANAGER__';
 let singletonId = null;
 
 export async function getAgentManagerSingleton(): Promise<AgentManager> {
-  const globalKey = '__CASCADE_AGENT_MANAGER__';
   if (!(globalThis as any)[globalKey]) {
-    singletonId = Math.floor(Math.random() * 1e9);
-    console.debug(`[AgentManagerSingleton] Creating new singleton instance, id=${singletonId}`);
+    console.debug(`[AgentManagerSingleton] Creating new singleton instance`);
     (globalThis as any)[globalKey] = await AgentManager.hydrateFromPersistent();
-    (globalThis as any)[globalKey].__singletonId = singletonId;
   } else {
-    singletonId = (globalThis as any)[globalKey].__singletonId;
-    console.debug(`[AgentManagerSingleton] Returning existing singleton instance, id=${singletonId}`);
+    console.debug(`[AgentManagerSingleton] Returning existing singleton instance`);
   }
   return (globalThis as any)[globalKey];
 }
 
 
-// For legacy sync consumers (should be refactored to async)
+// DEPRECATED: For legacy sync consumers only. Use getAgentManagerSingleton() async accessor instead.
 export let agentManager: AgentManager;
 getAgentManagerSingleton().then(mgr => {
   // Patch prototype if missing (in rare test edge cases)

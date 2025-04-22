@@ -6,6 +6,15 @@
 import type { AgentInfo, AgentStatus as ManagerAgentStatus } from './agentManager'; // Renamed AgentStatus to avoid name clash
 import { agentManager } from './agentManagerSingleton'; // Use the singleton instance getter
 import { agentLogStore } from './agentLogs';
+
+// Helper function to ensure all logs have a timestamp
+function addLogWithTimestamp(entry: Omit<Parameters<typeof agentLogStore.addLog>[0], 'timestamp'> & { timestamp?: number }) {
+  if (!entry.timestamp) {
+    entry.timestamp = Date.now();
+  }
+  agentLogStore.addLog(entry as any);
+}
+
 import { agentHealthStore, AgentHealthStatus } from './agentHealth'; // Assuming AgentHealthStatus is defined here
 import { logAgentHealthToSupabase } from './supabaseAgentOps';
 import { sendSlackNotification } from '../utils/notify';
@@ -106,6 +115,20 @@ function agentInfoToOrchestratedAgent(agentInfo: AgentInfo, forcedStatus?: Orche
 // --- Orchestrator Class ---
 
 export class AgentOrchestrator {
+  /**
+   * Retrieve an agent by ID, always querying AgentManager for the latest state.
+   */
+  async getAgent(id: string): Promise<OrchestratedAgent | undefined> {
+    addLogWithTimestamp({ agentId: id, level: 'info', message: `[Orchestrator.getAgent] Looking up agent in AgentManager: ${id}` });
+    const agentInfo = await this.agentManager.findAgentById(id);
+    if (!agentInfo) {
+      addLogWithTimestamp({ agentId: id, level: 'info', message: `[Orchestrator.getAgent] Agent not found in AgentManager: ${id}` });
+      return undefined;
+    }
+    addLogWithTimestamp({ agentId: id, level: 'info', message: `[Orchestrator.getAgent] Agent found: ${id}, status=${agentInfo.status}` });
+    return agentInfoToOrchestratedAgent(agentInfo);
+  }
+
   // Use a getter for the AgentManager singleton for clarity
   public get agentManager(): import('./agentManager').AgentManager {
     // Access the global singleton ensured by agentManagerSingleton.ts
@@ -147,12 +170,12 @@ export class AgentOrchestrator {
     this.setupHealthMonitoring();
     this.setupSlackNotifications();
 
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Orchestrator instance ${this.instanceId} initialized.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Orchestrator instance ${this.instanceId} initialized.` });
   }
 
   private setupSlackNotifications(): void {
     if (!this.options.slackWebhookUrl) {
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: 'Slack notifications disabled (no webhook URL configured).' });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: 'Slack notifications disabled (no webhook URL configured).' });
         return; // Do nothing if webhook URL is not configured
     }
 
@@ -165,31 +188,31 @@ export class AgentOrchestrator {
       if (isCriticalStatus && lastNotifiedStatus[agentId] !== status) {
         lastNotifiedStatus[agentId] = status; // Update last notified status
         try {
-          agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `Sending Slack notification for agent ${agentId} status: ${status}` });
+          addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `Sending Slack notification for agent ${agentId} status: ${status}` });
           await sendSlackNotification(
             `:rotating_light: Agent '${agentId}' status changed to *${status}* at ${new Date().toLocaleString()}`,
             webhookUrl
           );
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
-          agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `Failed to send Slack notification for ${agentId}: ${errorMsg}` });
+          addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `Failed to send Slack notification for ${agentId}: ${errorMsg}` });
         }
       } else if (!isCriticalStatus && lastNotifiedStatus[agentId] && isCriticalStatus) {
          // Optional: Clear notification status if agent recovers or is stopped cleanly
          delete lastNotifiedStatus[agentId];
       }
     });
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Slack notifications enabled.` });
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Slack notifications enabled.` });
   }
 
   private setupHealthMonitoring(): void {
     const debounceTimeouts: Record<string, NodeJS.Timeout> = {};
 
     agentHealthStore.onStatusChange(async (agentId, status) => {
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `Received onStatusChange event: ${agentId} -> ${status}` });
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Received onStatusChange event: ${agentId} -> ${status}` });
 
       if (status === 'crashed') {
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `Auto-recovery trigger condition met for agent ${agentId}. Debouncing...` });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `Auto-recovery trigger condition met for agent ${agentId}. Debouncing...` });
 
         if (debounceTimeouts[agentId]) {
             clearTimeout(debounceTimeouts[agentId]);
@@ -197,10 +220,10 @@ export class AgentOrchestrator {
 
         debounceTimeouts[agentId] = setTimeout(async () => {
           try {
-            agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Debounce timer fired for agent ${agentId}. Starting recovery check.` });
+            addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Debounce timer fired for agent ${agentId}. Starting recovery check.` });
             // Re-check the agent's status directly via AgentManager before attempting recovery
             const liveStatus = this.agentManager.getAgentHealth(agentId);
-            const agentInfo = await this.agentManager.getAgentById(agentId); // Get full info for restart
+            const agentInfo = await this.agentManager.findAgentById(agentId); // Get full info for restart
 
             if (agentInfo && liveStatus === 'error') { // Use 'error' status from AgentManager which triggers 'crashed' in healthStore
               agentLogStore.addLog({
@@ -211,18 +234,18 @@ export class AgentOrchestrator {
               });
               await this.restartAgent(agentId, agentInfo); // Pass agentInfo to avoid re-fetching
             } else {
-               agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Auto-recovery for ${agentId} aborted. Agent not found or status is no longer 'error' (current: ${liveStatus}).` });
+               addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Auto-recovery for ${agentId} aborted. Agent not found or status is no longer 'error' (current: ${liveStatus}).` });
             }
           } catch (error) {
               const errorMsg = error instanceof Error ? error.message : String(error);
-              agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `Error during auto-recovery debounce callback for ${agentId}: ${errorMsg}` });
+              addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `Error during auto-recovery debounce callback for ${agentId}: ${errorMsg}` });
           } finally {
                delete debounceTimeouts[agentId]; // Clean up timeout reference
           }
         }, this.options.recoveryDebounceMs);
       } else if (debounceTimeouts[agentId]) {
            // If status changes from crashed to something else before debounce fires, cancel recovery
-           agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Agent ${agentId} status changed to ${status} before recovery debounce, canceling recovery attempt.` });
+           addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Agent ${agentId} status changed to ${status} before recovery debounce, canceling recovery attempt.` });
            clearTimeout(debounceTimeouts[agentId]);
            delete debounceTimeouts[agentId];
       }
@@ -235,7 +258,7 @@ export class AgentOrchestrator {
    */
   registerCapabilities(agentId: string, capabilities: AgentCapability[]): void {
     this.capabilityRegistry[agentId] = capabilities;
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `Registered capabilities for ${agentId}: ${capabilities.join(', ')}` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Registered capabilities for ${agentId}: ${capabilities.join(', ')}` });
   }
 
   /**
@@ -257,7 +280,7 @@ export class AgentOrchestrator {
     }
     // Simple random selection for now, could be more sophisticated (load balancing, etc.)
     const to = candidates[Math.floor(Math.random() * candidates.length)];
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Delegating task requiring '${capability}' from ${from} to ${to}.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Delegating task requiring '${capability}' from ${from} to ${to}.` });
     await this.sendAgentMessage({ from, to, content: task, timestamp: Date.now() });
     return to;
   }
@@ -290,15 +313,15 @@ export class AgentOrchestrator {
         tags: ['a2a', 'protocol', 'agent-message', `from:${msg.from}`, `to:${msg.to}`], // Add useful tags
         created_at: new Date().toISOString(),
       });
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `A2A message ${envelope.id} persisted to MCP.` });
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `A2A message ${envelope.id} persisted to MCP.` });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `[A2A->MCP] Failed to persist A2A message ${envelope.id}: ${errorMsg}` });
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `[A2A->MCP] Failed to persist A2A message ${envelope.id}: ${errorMsg}` });
       // Decide if failure to persist should prevent message sending or just be logged
     }
 
     // Future: Actually deliver the message to the target agent instance (e.g., via WebSocket, queue, direct call)
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `A2A message ${envelope.id} from ${msg.from} to ${msg.to} queued/sent.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `A2A message ${envelope.id} from ${msg.from} to ${msg.to} queued/sent.` });
   }
 
   /**
@@ -330,19 +353,21 @@ export class AgentOrchestrator {
     // Removed status, host - these are managed/derived, not launch params
   }): Promise<OrchestratedAgent> {
     const { id, name = id, type, config = {} } = agentConfig;
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Attempting to launch agent ${id} (type: ${type}).` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `[launchAgent] Received agentConfig: id=${id}, name=${name}, type=${type}, config=${JSON.stringify(config)}` });
     try {
+      // Explicit debug log for type propagation
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `[launchAgent] Passing to AgentManager.deployAgent: id=${id}, name=${name}, type=${type}` });
       // Delegate deployment to AgentManager
       await this.agentManager.deployAgent(id, name, type, config);
 
       // Retrieve the authoritative AgentInfo after deployment attempt
-      const agentInfo = await this.agentManager.getAgentById(id); // Use async getter to ensure latest state
+      const agentInfo = await this.agentManager.findAgentById(id); // Use async getter to ensure latest state
       if (!agentInfo) {
         // This indicates a problem within deployAgent or state consistency
         throw new Error(`AgentManager failed to provide AgentInfo for id=${id} after deployment call.`);
       }
 
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Agent ${id} launched successfully via AgentManager (current status: ${agentInfo.status}).` });
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Agent ${id} launched successfully via AgentManager (current status: ${agentInfo.status}).` });
       // Map to the orchestrator's view
       return agentInfoToOrchestratedAgent(agentInfo);
 
@@ -362,18 +387,25 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Stop an agent by ID (delegates to AgentManager).
+   * Stop or delete an agent by ID (delegates to AgentManager).
+   * @param id Agent ID
+   * @param deleteAfterStop If true, fully delete agent from memory and persistent storage
    */
-  async stopAgent(id: string): Promise<void> {
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Attempting to stop agent ${id}.` });
+  async stopAgent(id: string, deleteAfterStop: boolean = false): Promise<void> {
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Attempting to stop${deleteAfterStop ? ' and delete' : ''} agent ${id}.` });
     try {
-      await this.agentManager.stopAgent(id);
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Stop command issued for agent ${id}.` });
-      // Remove from capability registry upon stopping
+      if (deleteAfterStop) {
+        await this.agentManager.deleteAgent(id);
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Delete command issued for agent ${id}.` });
+      } else {
+        await this.agentManager.stopAgent(id);
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Stop command issued for agent ${id}.` });
+      }
+      // Remove from capability registry upon stopping or deleting
       delete this.capabilityRegistry[id];
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `Error stopping agent ${id}: ${errorMsg}` });
+      addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `Error stopping/deleting agent ${id}: ${errorMsg}` });
       throw err; // Re-throw to signal failure
     }
   }
@@ -382,19 +414,19 @@ export class AgentOrchestrator {
    * Restart a crashed agent with retry logic.
    */
   async restartAgent(agentId: string, agentInfo?: AgentInfo): Promise<'recovered' | 'recovery_failed'> {
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Restart process initiated for agent ${agentId}.` });
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Restart process initiated for agent ${agentId}.` });
 
     const currentAgentInfo = agentInfo ?? await this.agentManager.getAgentById(agentId);
 
     if (!currentAgentInfo) {
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `[Restart] Agent ${agentId} not found.` });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `[Restart] Agent ${agentId} not found.` });
         return 'recovery_failed';
     }
 
     // Double-check health status via AgentManager right before attempting restart
     const liveHealth = this.agentManager.getAgentHealth(agentId);
     if (liveHealth !== 'error') {
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `[Restart] Agent ${agentId} is no longer in 'error' state (current: ${liveHealth}). Aborting restart.` });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `[Restart] Agent ${agentId} is no longer in 'error' state (current: ${liveHealth}). Aborting restart.` });
         // Reset recovery attempts if it was already recovering but fixed itself?
         // delete this.recoveryAttempts[agentId];
         return 'recovery_failed'; // Or maybe 'recovered' if health is 'running'? Needs definition.
@@ -402,7 +434,7 @@ export class AgentOrchestrator {
 
     // Increment retry attempts
     this.recoveryAttempts[agentId] = (this.recoveryAttempts[agentId] || 0) + 1;
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `[Restart] Recovery attempt ${this.recoveryAttempts[agentId]}/${this.options.maxRecoveryAttempts} for agent ${agentId}.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `[Restart] Recovery attempt ${this.recoveryAttempts[agentId]}/${this.options.maxRecoveryAttempts} for agent ${agentId}.` });
 
 
     if (this.recoveryAttempts[agentId] > this.options.maxRecoveryAttempts) {
@@ -418,12 +450,12 @@ export class AgentOrchestrator {
     logAgentHealthToSupabase(agentId, 'restarting', `Attempting recovery #${this.recoveryAttempts[agentId]}`, 'warn', { event: 'restartAgentAttempt' });
 
     // Apply cooldown before attempting restart
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `[Restart] Applying recovery cooldown (${this.options.recoveryCooldownMs}ms) for agent ${agentId}.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `[Restart] Applying recovery cooldown (${this.options.recoveryCooldownMs}ms) for agent ${agentId}.` });
     await new Promise(res => setTimeout(res, this.options.recoveryCooldownMs));
 
     // Attempt to relaunch the agent using its last known configuration
     try {
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `[Restart] Relaunching agent ${agentId} using last configuration.` });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `[Restart] Relaunching agent ${agentId} using last configuration.` });
         await this.launchAgent({ // launchAgent now uses agentManager.deployAgent internally
             id: currentAgentInfo.id,
             name: currentAgentInfo.name, // Use name from info
@@ -468,8 +500,8 @@ export class AgentOrchestrator {
    * Get an agent by ID.
    */
   async getAgent(agentId: string): Promise<OrchestratedAgent | undefined> {
-    const agentInfo = await this.agentManager.getAgentById(agentId); // Use the manager's async getter
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `getAgent(${agentId}) lookup result from AgentManager: ${agentInfo ? agentInfo.status : 'not found'}` });
+    const agentInfo = await this.agentManager.findAgentById(agentId); // Use the manager's async getter
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `getAgent(${agentId}) lookup result from AgentManager: ${agentInfo ? agentInfo.status : 'not found'}` });
     if (!agentInfo) {
         return undefined;
     }
@@ -491,7 +523,7 @@ export class AgentOrchestrator {
    */
   async listAgents(): Promise<OrchestratedAgent[]> {
     const agentInfos = await this.agentManager.listAgents(); // Get latest list from manager
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'debug', message: `listAgents retrieved ${agentInfos.length} agents from AgentManager.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `listAgents retrieved ${agentInfos.length} agents from AgentManager.` });
     return agentInfos.map(info => agentInfoToOrchestratedAgent(info)); // Map each to OrchestratedAgent
   }
 
@@ -510,14 +542,14 @@ export class AgentOrchestrator {
    * Clears orchestrator-specific state and tells AgentManager to clear its state.
    */
   async reset(): Promise<void> {
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `Resetting orchestrator state and clearing all agents via AgentManager.` });
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `Resetting orchestrator state and clearing all agents via AgentManager.` });
     // Clear orchestrator state first
     this.messageBus = [];
     this.recoveryAttempts = {};
     this.capabilityRegistry = {};
     // Clear AgentManager state (stops instances, clears map, clears registry)
     await this.agentManager.clearAllAgents();
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `Orchestrator reset complete.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `Orchestrator reset complete.` });
   }
 
 
@@ -540,7 +572,7 @@ export class AgentOrchestrator {
   async reviewWithQC(ticket: string, implementation: string, openAIApiKey: string): Promise<string> {
     const qcAgentId = `qc-review-${Date.now()}`;
     const qcAgent = await this.launchQCAgent(qcAgentId, openAIApiKey);
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Performing QC review with temporary agent ${qcAgentId}.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Performing QC review with temporary agent ${qcAgentId}.` });
     const review = await qcAgent.reviewImplementation(ticket, implementation);
     // Consider cleanup/logging for the temporary agent if needed
     return review;
@@ -553,7 +585,7 @@ export class AgentOrchestrator {
      // Note: Similar to QC agent, this creates a standalone instance.
     const builderAgentId = `builder-${Date.now()}`;
     const builder = new BuilderAgent(builderAgentId);
-    agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Processing feature request with temporary builder agent ${builderAgentId}.` });
+    addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Processing feature request with temporary builder agent ${builderAgentId}.` });
     const tickets = await builder.receiveRequest(request);
     agentLogStore.addLog({ agentId: builder.id, level: 'info', message: `Builder processed request into ${tickets.length} tickets.` });
     return tickets;
@@ -564,26 +596,26 @@ export class AgentOrchestrator {
    * Dynamic scaling: auto-spawn/stop agents based on workload (example logic).
    */
   async autoscaleAgents(workload: number): Promise<void> {
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Autoscaling check triggered with workload: ${workload}` });
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Autoscaling check triggered with workload: ${workload}` });
      const agents = await this.listAgents(); // Gets OrchestratedAgent list
      // Filter based on status suitable for work (e.g., 'healthy', 'recovered')
      const availableAgents = agents.filter(a => a.status === 'healthy' || a.status === 'recovered');
      const targetCount = Math.max(1, Math.ceil(workload / this.options.autoscaleAgentFactor)); // Ensure at least 1 agent
 
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Autoscaling: Current available agents: ${availableAgents.length}, Target count: ${targetCount}` });
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Autoscaling: Current available agents: ${availableAgents.length}, Target count: ${targetCount}` });
 
 
      if (availableAgents.length < targetCount) {
        // Spawn new agents (example type 'general')
        const needed = targetCount - availableAgents.length;
-       agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Autoscaling up: Spawning ${needed} new agent(s).` });
+       addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Autoscaling up: Spawning ${needed} new agent(s).` });
        for (let i = 0; i < needed; i++) {
          const id = `auto-agent-${Date.now()}-${i}`;
          try {
            // Use a default type for auto-scaled agents, adjust as needed
            await this.launchAgent({ id, type: 'general', config: { autoScaled: true } });
          } catch (error) {
-             agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `Autoscaling: Failed to launch new agent ${id}: ${error instanceof Error ? error.message : String(error)}` });
+             addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `Autoscaling: Failed to launch new agent ${id}: ${error instanceof Error ? error.message : String(error)}` });
          }
        }
      } else if (availableAgents.length > targetCount) {
@@ -595,16 +627,16 @@ export class AgentOrchestrator {
                            // .sort((a,b) => parseInt(b.id.split('-')[2] || '0') - parseInt(a.id.split('-')[2] || '0')) // Example: Stop newest based on timestamp in ID
                             .slice(0, excessCount);
 
-        agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Autoscaling down: Stopping ${excessCount} excess agent(s): ${agentsToStop.map(a=>a.id).join(', ')}` });
+        addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Autoscaling down: Stopping ${excessCount} excess agent(s): ${agentsToStop.map(a=>a.id).join(', ')}` });
        for (const agent of agentsToStop) {
          try {
            await this.stopAgent(agent.id);
          } catch (error) {
-             agentLogStore.addLog({ agentId: 'orchestrator', level: 'error', message: `Autoscaling: Failed to stop excess agent ${agent.id}: ${error instanceof Error ? error.message : String(error)}` });
+             addLogWithTimestamp({ agentId: 'orchestrator', level: 'error', message: `Autoscaling: Failed to stop excess agent ${agent.id}: ${error instanceof Error ? error.message : String(error)}` });
          }
        }
      } else {
-          agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Autoscaling: Agent count (${availableAgents.length}) matches target (${targetCount}). No action needed.` });
+          addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Autoscaling: Agent count (${availableAgents.length}) matches target (${targetCount}). No action needed.` });
      }
    }
 
@@ -613,10 +645,10 @@ export class AgentOrchestrator {
     * Note: This only updates the stored config. Applying it to a running instance might require agent-specific logic (e.g., a `setConfig` method on the agent instance).
     */
    async updateAgentConfig(agentId: string, configUpdate: Partial<AgentInfo['config']>): Promise<boolean> {
-     agentLogStore.addLog({ agentId: 'orchestrator', level: 'info', message: `Attempting to update config for agent ${agentId}.` });
-     const agentInfo = await this.agentManager.getAgentById(agentId); // Ensure we have the latest info
+     addLogWithTimestamp({ agentId: 'orchestrator', level: 'info', message: `Attempting to update config for agent ${agentId}.` });
+     const agentInfo = await this.agentManager.findAgentById(agentId); // Ensure we have the latest info
      if (!agentInfo) {
-       agentLogStore.addLog({ agentId: 'orchestrator', level: 'warn', message: `[updateAgentConfig] Agent ${agentId} not found.` });
+       addLogWithTimestamp({ agentId: 'orchestrator', level: 'warn', message: `[updateAgentConfig] Agent ${agentId} not found.` });
        return false;
      }
 

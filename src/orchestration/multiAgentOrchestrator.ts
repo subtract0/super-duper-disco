@@ -17,18 +17,26 @@ export class MultiAgentOrchestrator {
   messageBus: A2AEnvelope[] = [];
 
   private agentMessageMemory: { save: (msg: AgentMessageRecord) => Promise<void> };
-  constructor(openAIApiKey: string, agentMessageMemory: { save: (msg: AgentMessageRecord) => Promise<void> }) {
+  /**
+   * Constructor is now sync and only sets up fields. Call `await init(openAIApiKey)` after construction to deploy/start agents.
+   */
+  constructor(agentMessageMemory: { save: (msg: AgentMessageRecord) => Promise<void> }) {
     // Dependency injection for testability and protocol compliance
     this.agentMessageMemory = agentMessageMemory;
-    // Deploy and start all agents via AgentManager
+  }
+
+  /**
+   * Deploy and start all agents via AgentManager. Must be awaited after construction.
+   */
+  async init(openAIApiKey: string) {
     if (!agentManager) throw new Error('agentManager is undefined. Ensure agentManager is imported and initialized.');
-    agentManager.deployAgent("planner", "Planner Agent", "langchain", { openAIApiKey });
-    agentManager.deployAgent("researcher", "Researcher Agent", "langchain", { openAIApiKey });
-    agentManager.deployAgent("developer", "Developer Agent", "langchain", { openAIApiKey });
-    agentManager.deployAgent("devops", "DevOps Agent", "langchain", { openAIApiKey });
+    await agentManager.deployAgent("planner", "Planner Agent", "langchain", { openAIApiKey });
+    await agentManager.deployAgent("researcher", "Researcher Agent", "langchain", { openAIApiKey });
+    await agentManager.deployAgent("developer", "Developer Agent", "langchain", { openAIApiKey });
+    await agentManager.deployAgent("devops", "DevOps Agent", "langchain", { openAIApiKey });
     for (const id of this.agentIds) {
       const info = agentManager.agents.get(id);
-      if (info && info.instance && typeof info.instance.start === 'function') info.instance.start();
+      if (info && info.instance && typeof info.instance.start === 'function') await info.instance.start();
     }
   }
 

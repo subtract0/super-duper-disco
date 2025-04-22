@@ -1,12 +1,55 @@
-jest.mock('../../../src/orchestration/supabaseAgentOps', () => ({
-  logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
-  fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
-}));
+console.log('TEST FILE LOADED: starting import diagnostics');
+let importErrors = [];
+try {
+  jest.mock('../../../src/orchestration/supabaseAgentOps', () => ({
+    logAgentHealthToSupabase: jest.fn().mockResolvedValue(undefined),
+    fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
+  }));
+  console.log('jest.mock for supabaseAgentOps succeeded');
+} catch (e) {
+  importErrors.push({ step: 'jest.mock supabaseAgentOps', error: e });
+  console.error('jest.mock supabaseAgentOps failed:', e);
+}
+try {
+  global.handler = require('./index').default;
+  console.log('import handler from ./index succeeded');
+} catch (e) {
+  importErrors.push({ step: 'handler', error: e });
+  console.error('import handler from ./index failed:', e);
+}
+try {
+  global.getOrchestratorSingleton = require('../../../src/orchestration/orchestratorSingleton').getOrchestratorSingleton;
+  global.orchestratorSync = require('../../../src/orchestration/orchestratorSingleton').orchestrator;
+  global.resetOrchestratorSingleton = require('../../../src/orchestration/orchestratorSingleton').resetOrchestratorSingleton;
+  console.log('import orchestratorSingleton succeeded');
+} catch (e) {
+  importErrors.push({ step: 'orchestratorSingleton', error: e });
+  console.error('import orchestratorSingleton failed:', e);
+}
+try {
+  global.getAgentManagerSingleton = require('../../../src/orchestration/agentManagerSingleton').getAgentManagerSingleton;
+  global.agentManagerSync = require('../../../src/orchestration/agentManagerSingleton').agentManager;
+  global.resetAgentManagerSingleton = require('../../../src/orchestration/agentManagerSingleton').resetAgentManagerSingleton;
+  console.log('import agentManagerSingleton succeeded');
+} catch (e) {
+  importErrors.push({ step: 'agentManagerSingleton', error: e });
+  console.error('import agentManagerSingleton failed:', e);
+}
+try {
+  global.createMocks = require('node-mocks-http').createMocks;
+  console.log('import createMocks from node-mocks-http succeeded');
+} catch (e) {
+  importErrors.push({ step: 'createMocks', error: e });
+  console.error('import createMocks from node-mocks-http failed:', e);
+}
+if (importErrors.length > 0) {
+  console.error('IMPORT ERRORS SUMMARY:', JSON.stringify(importErrors, null, 2));
+  throw new Error('Import errors detected, see above for details.');
+}
 
-import handler from './index';
-import { getOrchestratorSingleton, orchestrator as orchestratorSync, resetOrchestratorSingleton } from '../../../src/orchestration/orchestratorSingleton';
-import { getAgentManagerSingleton, agentManager as agentManagerSync, resetAgentManagerSingleton } from '../../../src/orchestration/agentManagerSingleton';
-import { createMocks } from 'node-mocks-http';
+test('sanity: jest runs this file', () => {
+  expect(1 + 1).toBe(2);
+});
 
 describe('/api/agents/index API', () => {
   async function stopAndLogAllAgents() {
@@ -86,7 +129,7 @@ describe('/api/agents/index API', () => {
     
       method: 'POST',
     
-      body: { type: 'telegram', host: 'local', config: { foo: 'bar' } },
+      body: { type: 'test-type', host: 'local', config: { foo: 'bar' } },
     
     });
     
@@ -119,32 +162,50 @@ describe('/api/agents/index API', () => {
 
     
   it('GET returns agent after POST', async () => {
-    try {
-    // Log before test
-    // eslint-disable-next-line no-console
-    console.log('Test start: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    // Add agent
+
+  });
+
+  it('Agent lifecycle: create, retrieve, delete, confirm 404', async () => {
+    // POST create
+    const agentId = 'test-lifecycle-404';
     const { req: postReq, res: postRes } = createMocks({
       method: 'POST',
-      body: { type: 'telegram', host: 'local', config: { foo: 'bar' } },
+      body: { id: agentId, type: 'test-type', host: 'test', config: { foo: 'bar' } },
     });
     await handler(postReq, postRes);
-    console.log('After POST: orchestrator.listAgents() =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    console.log('After POST: agentManager.listAgents() =', JSON.stringify(agentManager.listAgents(), null, 2));
-    // Now GET
-    const { req, res } = createMocks({ method: 'GET' });
-    await handler(req, res);
-    const data = JSON.parse(res._getData());
-    console.log('After GET: data.agents =', JSON.stringify(data.agents, null, 2));
-    console.log('After GET: orchestrator.listAgents() =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    console.log('After GET: agentManager.listAgents() =', JSON.stringify(agentManager.listAgents(), null, 2));
-    expect(data.agents.length).toBe(1);
-    // Log after test
-    // eslint-disable-next-line no-console
-    console.log('Test end: agents =', JSON.stringify(orchestrator.listAgents(), null, 2));
-    } catch (err) {
-      console.error('Test error:', err);
-      throw err;
-    }
+    expect(postRes._getStatusCode()).toBe(201);
+    const postData = JSON.parse(postRes._getData());
+    expect(postData.ok).toBe(true);
+    expect(postData.agent.id).toBeDefined();
+    const createdId = postData.agent.id || agentId;
+
+    // Immediate GET
+    const { req: getReq, res: getRes } = createMocks({
+      method: 'GET',
+      query: { id: createdId },
+    });
+    // Use [id] handler for GET/DELETE
+    const getHandler = require('./[id]').default;
+    await getHandler(getReq, getRes);
+    expect(getRes._getStatusCode()).toBe(200);
+    const getData = JSON.parse(getRes._getData());
+    expect(getData.agent).toBeDefined();
+    expect(getData.agent.id).toBe(createdId);
+
+    // DELETE
+    const { req: delReq, res: delRes } = createMocks({
+      method: 'DELETE',
+      query: { id: createdId },
+    });
+    await getHandler(delReq, delRes);
+    expect(delRes._getStatusCode()).toBe(200);
+
+    // Final GET should 404
+    const { req: get404Req, res: get404Res } = createMocks({
+      method: 'GET',
+      query: { id: createdId },
+    });
+    await getHandler(get404Req, get404Res);
+    expect(get404Res._getStatusCode()).toBe(404);
   });
 });

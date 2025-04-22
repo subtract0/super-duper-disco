@@ -1,6 +1,8 @@
 // NOTE: All agent mocks used with AgentManager.deployAgent MUST implement EventEmitter (e.g., use BaseAgent or a compatible class).
 // This prevents TypeError: agent.on is not a function during tests. See PLAN.md for regression-proofing details.
 import { EventEmitter } from 'events';
+import type { AgentManager } from './agentManager';
+import type { AgentManager } from './agentManager';
 
 // Minimal EventEmitter-compatible agent mock
 function makeAgentMock(id: string, name: string) {
@@ -27,13 +29,6 @@ jest.mock('./supabaseAgentOps', () => ({
   fetchAgentLogsFromSupabase: jest.fn().mockResolvedValue([]),
 }));
 
-// Mock agentRegistry to prevent real DB calls
-function getCurrentAgents() {
-  try {
-    const singleton = require('./agentManagerSingleton').agentManager;
-    const agents = Array.from(singleton?.agents?.values() || []);
-    // Deep debug log
-    // eslint-disable-next-line no-console
     console.debug('[TEST][getCurrentAgents] singleton:', singleton, 'agent count:', agents.length);
     return agents;
   } catch (err) {
@@ -44,14 +39,14 @@ function getCurrentAgents() {
 }
 
 // In-memory array to simulate persistent agent info storage for tests
-const mockAgentInfos: any[] = [];
+const mockAgentInfos: unknown[] = [];
 
 // Helper to fetch the singleton id for debugging
 function getSingletonId() {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const singleton = require('./agentManagerSingleton').agentManager;
-    return singleton && singleton.__singletonId;
+    const { agentManager } = await import('./agentManagerSingleton');
+    return agentManager && agentManager.__singletonId;
   } catch {
     return undefined;
   }
@@ -100,13 +95,12 @@ beforeEach(() => {
 import { getAgentManagerSingleton } from './agentManagerSingleton';
 // Do not import agentManager directly; use a local variable after awaiting the singleton.
 jest.mock('./persistentMemory', () => {
-  const records: any[] = [];
+  const records: unknown[] = [];
   return {
     persistentMemory: {
       save: jest.fn(async (rec) => { records.push(rec); }),
-      query: jest.fn(async ({ type }) => records.filter(r => r.type === type).map(r => ({ value: { content: r.content } }))),
-      getAll: jest.fn(async () => records.map(r => ({ value: { content: r.content } }))),
-      clear: () => { records.length = 0; },
+      load: jest.fn(async () => records),
+      clear: jest.fn(() => { records.length = 0; }), // Ensure clear() exists and is synchronous for test
       _records: records,
     }
   };
@@ -115,27 +109,27 @@ jest.mock('./persistentMemory', () => {
 // NOTE: Always fetch the agent from agentManager.agents.get(id) after calling getAgentHealth or autoRecoverAgent.
 // This ensures you are asserting on the up-to-date agent object, as listAgents() may return a stale copy.
 describe('AgentManager', () => {
-  let agentManager: any;
+  let agentManager: AgentManager;
   beforeAll(async () => {
     agentManager = await getAgentManagerSingleton();
   });
   beforeEach(async () => {
     // Reset state before each test
     console.log('[TEST] beforeEach: resetting agentManager singleton');
-    const { resetAgentManagerForTest } = require('./agentManagerSingleton');
+    const { resetAgentManagerForTest } = (await import('./agentManagerSingleton'));
     await resetAgentManagerForTest();
     agentManager = await getAgentManagerSingleton();
     console.log('[TEST] beforeEach: finished resetAgentManagerForTest, starting persistentMemory.clear');
-    require('./persistentMemory').persistentMemory.clear();
+    (await import('./persistentMemory')).persistentMemory.clear();
     console.log('[TEST] beforeEach: finished persistentMemory.clear');
   });
   afterEach(async () => {
     // Ensure cleanup after each test
     console.log('[TEST] afterEach: resetting agentManager singleton');
-    const { resetAgentManagerForTest } = require('./agentManagerSingleton');
+    const { resetAgentManagerForTest } = (await import('./agentManagerSingleton'));
     await resetAgentManagerForTest();
     console.log('[TEST] afterEach: finished resetAgentManagerForTest, starting persistentMemory.clear');
-    require('./persistentMemory').persistentMemory.clear();
+    (await import('./persistentMemory')).persistentMemory.clear();
     console.log('[TEST] afterEach: finished persistentMemory.clear');
   });
 
@@ -193,12 +187,12 @@ describe('AgentManager', () => {
     await agentManager.deployAgent(id, id, 'native');
     await agentManager.stopAgent(id);
     const agents = await agentManager.listAgents();
-    const agent = agents.find((a: any) => a.id === id);
+    const agent = agents.find((a: unknown) => a.id === id);
     if (!agent) {
       throw new Error(`Agent not found after stop. Current agents: ${JSON.stringify(agents)}`);
     }
     expect(agent).toBeDefined();
-    expect(agent!.status).toBe('stopped');
+    expect(agent.status).toBe('stopped');
   });
 
   test('should return logs for an agent', async () => {
@@ -311,7 +305,7 @@ describe('AgentManager', () => {
     await agentManager.deployAgent(id, id, 'native');
     const agents = await agentManager.listAgents();
 console.log(`[TEST DEBUG] After deploy, agents:`, agents);
-const agent = agents.find((a: any) => a.id === id);
+const agent = agents.find((a: unknown) => a.id === id);
 console.log(`[TEST DEBUG] Searched for agent id ${id}, found:`, agent);
     if (!agent) throw new Error('Agent not found');
     agent.status = 'error';

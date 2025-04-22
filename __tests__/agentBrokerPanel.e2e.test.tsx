@@ -10,7 +10,7 @@ beforeEach(() => {
       return Promise.resolve({
         ok: true,
         json: async () => ({ cards: [
-          { id: '1', name: 'Test Agent', description: 'Test Desc', image: '', config: { type: 'test' } },
+          { id: '1', name: 'Test Agent', description: 'Test Desc', image: '', config: { type: 'test-type' } },
           { id: '2', name: 'Test Agent 2', description: 'Test Desc 2', image: '', config: { type: 'test2' } }
         ] })
       });

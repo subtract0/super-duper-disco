@@ -3,6 +3,7 @@ console.log('[factory][VERSION] 2025-04-21T21:00+02:00', typeof __filename !== '
 import { BaseAgent, AgentLike } from './BaseAgent';
 import { LangChainAgent } from '../langchainAgent';
 import { AutoGenAgent } from '../autoGenAgent';
+import { DeveloperAgent } from './developerAgent';
 
 export function createAgent(id: string, name: string, type?: string, config?: any): AgentLike {
   // Print module filename for debugging test isolation issues
@@ -35,14 +36,10 @@ export function createAgent(id: string, name: string, type?: string, config?: an
         // eslint-disable-next-line no-console
         console.log('[factory][createAgent] type=test-type');
         return new BaseAgent(id, name);
-      case 'test':
+      case 'developer':
         // eslint-disable-next-line no-console
-        console.log('[factory][createAgent] type=test');
-        return new BaseAgent(id, name);
-      case 'telegram':
-        // eslint-disable-next-line no-console
-        console.log('[factory][createAgent] type=telegram');
-        return new BaseAgent(id, name);
+        console.log('[factory][createAgent] type=developer');
+        return new DeveloperAgent(id, config?.openAIApiKey || '');
       case 'native':
         // eslint-disable-next-line no-console
         console.log('[factory][createAgent] type=native');

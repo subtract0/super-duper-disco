@@ -5,9 +5,8 @@ import { globalState } from './dialogueState';
 import { FileService } from './fileService';
 import { TelegramApi } from './telegramApi';
 import { Controller } from './controller';
-import { AgentOrchestrator } from '@/orchestration/agentOrchestrator';
-import { agentManager } from '@/orchestration/agentManagerSingleton';
-import { MessageBus } from '@/orchestration/orchestrator/bus';
+import { getOrchestratorSingleton } from '@/orchestration/orchestratorSingleton';
+import { getAgentManagerSingleton } from '@/orchestration/agentManagerSingleton';
 
 const { NEXT_PUBLIC_SUPABASE_URL: url,
         NEXT_PUBLIC_SUPABASE_ANON_KEY: key,
@@ -17,13 +16,18 @@ if (!url || !key || !token) throw new Error('env missing');
 const supa = createClient(url, key);
 const files = new FileService(token, supa);
 const tg = new TelegramApi(token);
-const orch = new AgentOrchestrator({ manager: agentManager, bus: new MessageBus() });
-const ctrl = new Controller(orch);
+
+// Controller and orchestrator will be initialized per-request using the singleton
+
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse, _unused?: unknown, sendTelegramMessage?: (msg: { chat_id: number, text: string }) => Promise<void>) {
   // Allow test injection of sendTelegramMessage
   const send = sendTelegramMessage || ((msg: { chat_id: number, text: string }) => tg.send(msg));
   if (req.method !== 'POST') return res.status(405).end();
+
+  // Always use the orchestrator singleton for Telegram requests
+  const orchestrator = await getOrchestratorSingleton();
+  const ctrl = new Controller(orchestrator);
 
   const update = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   const msg = update.message || update.edited_message;

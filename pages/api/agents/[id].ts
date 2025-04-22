@@ -40,14 +40,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         debugLog(`[API][DELETE /api/agents/${id}] Agent not found.`);
         return res.status(404).json({ error: 'Agent not found' });
       }
-      await orchestrator.stopAgent(id); // Assumes full cleanup
+      await orchestrator.stopAgent(id, true); // Fully delete agent from memory and persistent storage
       const stillExists = await orchestrator.getAgent(id);
       if (!stillExists) {
-        debugLog(`[API][DELETE /api/agents/${id}] Agent successfully stopped and presumed deleted.`);
+        debugLog(`[API][DELETE /api/agents/${id}] Agent successfully stopped and deleted.`);
         return res.status(200).json({ message: 'Agent stopped and deleted successfully' });
       } else {
-        debugLog(`[API][DELETE /api/agents/${id}] Agent stopped, but might still exist in lists shortly after deletion.`, stillExists);
-        return res.status(200).json({ message: 'Agent stop requested, final deletion might be asynchronous.' });
+        debugLog(`[API][DELETE /api/agents/${id}] Agent stop/delete requested, but agent still exists.`, stillExists);
+        // If agent still exists, return 500 to match strict test expectations
+        return res.status(500).json({ error: 'Agent could not be deleted, still exists after deletion attempt.' });
       }
     } catch (err) {
       debugLog(`[API][DELETE /api/agents/${id}] Error during agent stop/deletion:`, err);

@@ -5,11 +5,12 @@ import { agentMessageMemory } from './agentMessageMemory';
 describe('MultiAgentWorkflow Protocol Compliance', () => {
   let workflow: MultiAgentWorkflow;
   const agentConfigs: AgentConfig[] = [
-    { id: 'planner', role: 'Planner', openAIApiKey: 'dummy', systemPrompt: 'Plan tasks.' },
-    { id: 'developer', role: 'Developer', openAIApiKey: 'dummy', systemPrompt: 'Develop features.' }
+    { id: 'planner', role: 'Planner', type: 'langchain', openAIApiKey: 'dummy', systemPrompt: 'Plan tasks.' },
+    { id: 'developer', role: 'Developer', type: 'langchain', openAIApiKey: 'dummy', systemPrompt: 'Develop features.' }
   ];
+  const mockModel = { call: jest.fn().mockResolvedValue('MOCK_RESPONSE') };
   beforeEach(() => {
-    workflow = new MultiAgentWorkflow(agentConfigs);
+    workflow = new MultiAgentWorkflow(agentConfigs, undefined, mockModel);
   });
 
   test('sendMessage constructs protocol-compliant A2AEnvelope and persists to MCP', async () => {

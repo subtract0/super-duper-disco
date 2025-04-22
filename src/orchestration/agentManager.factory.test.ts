@@ -41,20 +41,25 @@ describe('AgentManager (modular factory, isolated)', () => {
   beforeEach(() => {
     // agentManager = new AgentManager(); // Use the singleton from agentManagerSingleton instead.
   });
-  afterEach(() => {
-    agentManager.listAgents().forEach((agent) => agentManager.stopAgent(agent.id));
+  afterEach(async () => {
+    const agents = await agentManager.listAgents();
+    for (const agent of agents) {
+      await agentManager.stopAgent(agent.id);
+    }
   });
 
-  it('should instantiate native, langchain, and autogen agents using factory', () => {
+  it('should instantiate native, langchain, and autogen agents using factory', async () => {
     const ids = ['native-1', 'langchain-1', 'autogen-1'];
     const types = ['native', 'langchain', 'autogen'];
-    ids.forEach((id, idx) => {
-      agentManager.deployAgent(id, id, types[idx], {});
-      const agent = agentManager.listAgents().find((a) => typeof a === 'object' && a !== null && 'id' in a && (a as { id: string }).id === id);
+    for (let idx = 0; idx < ids.length; idx++) {
+      const id = ids[idx];
+      await agentManager.deployAgent(id, id, types[idx], {});
+      const arr = await agentManager.listAgents();
+      const agent = arr.find((a) => typeof a === 'object' && a !== null && 'id' in a && (a as { id: string }).id === id);
       expect(agent).toBeDefined();
       expect(agent!.type).toBe(types[idx]);
       expect(agent!.status).toBe('running');
-    });
-    ids.forEach(id => agentManager.stopAgent(id));
+      await agentManager.stopAgent(id);
+    }
   });
 });

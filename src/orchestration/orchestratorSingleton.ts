@@ -1,13 +1,17 @@
-import { AgentOrchestrator } from './agentOrchestrator';
-import { getAgentManagerSingleton } from './agentManagerSingleton';
+
 
 // Persist orchestrator as a global in test mode to avoid Jest/Next.js module isolation
 const globalKey = '__CASCADE_ORCHESTRATOR__';
 
-let orchestratorPromise: Promise<AgentOrchestrator> | null = null;
+let orchestratorPromise = null;
 
-export async function getOrchestratorSingleton(): Promise<AgentOrchestrator> {
+export async function getOrchestratorSingleton() {
   if (!orchestratorPromise) {
+    // Dynamically import dependencies to break circular dependency
+    const [{ AgentOrchestrator }, { getAgentManagerSingleton }] = await Promise.all([
+      import('./agentOrchestrator'),
+      import('./agentManagerSingleton')
+    ]);
     const agentManager = await getAgentManagerSingleton();
     orchestratorPromise = Promise.resolve(new AgentOrchestrator(agentManager));
   }
@@ -15,14 +19,19 @@ export async function getOrchestratorSingleton(): Promise<AgentOrchestrator> {
 }
 
 // For legacy sync consumers (should be refactored to async)
-export let orchestrator: AgentOrchestrator;
-getOrchestratorSingleton().then(o => { orchestrator = o; });
+export let orchestrator;
+try {
+  getOrchestratorSingleton().then(o => { orchestrator = o; });
+  console.log('[orchestratorSingleton] getOrchestratorSingleton().then succeeded');
+} catch (e) {
+  console.error('[orchestratorSingleton] getOrchestratorSingleton().then failed:', e);
+}
 
 // Reset the orchestrator singleton for prod/test
 export function resetOrchestratorSingleton() {
-  delete (globalThis as any)[globalKey];
+  delete (globalThis)[globalKey];
   orchestratorPromise = null;
-  orchestrator = undefined as any;
+  orchestrator = undefined;
   if (typeof console !== 'undefined') {
     console.debug('[OrchestratorSingleton] Singleton reset');
   }
@@ -31,5 +40,5 @@ export function resetOrchestratorSingleton() {
 export async function resetOrchestratorForTest() {
   resetOrchestratorSingleton();
   const mgr = await (await import('./agentManager')).AgentManager.hydrateFromPersistent();
-  (globalThis as any)[globalKey] = new AgentOrchestrator(mgr);
+  (globalThis)[globalKey] = new AgentOrchestrator(mgr);
 }

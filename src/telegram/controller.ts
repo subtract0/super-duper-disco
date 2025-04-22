@@ -29,6 +29,16 @@ export class Controller {
           return `Agent config updated: ${intent.agentId}`;
         case 'help':
           return 'Available commands:\n/status — show live agents\n/stop <id>\n/restart <id>\n/launch <id> [as <type>]\n/delete <id>\n/update config for agent <id> to {...}\n/help — show this help message';
+        case 'msg': {
+          const agent = this.orch.getAgent(intent.agentId!);
+          if (!agent) return `Agent not found: ${intent.agentId}`;
+          // Check for LLM/chat capability (duck-typing)
+          if (typeof agent.chat === 'function') {
+            const result = await agent.chat(intent.message!);
+            return result;
+          }
+          return `Agent '${intent.agentId}' does not support LLM chat.`;
+        }
         default:
           return 'Unknown command or intent.';
       }

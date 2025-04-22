@@ -139,8 +139,6 @@ export class AgentBroker {
     const agent = await this.orchestrator.launchAgent({
       id: uuidv4(),
       type: card.config.type,
-      status: 'pending',
-      host,
       config: card.config,
     });
     await agentHistoryStore.save({

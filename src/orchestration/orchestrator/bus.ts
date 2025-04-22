@@ -18,4 +18,7 @@ export class MessageBus {
   list(): AgentMessage[] {
     return [...this.messages];
   }
+
+  /** Clear all pending messages. */
+  clear(): void { this.messages = []; }
 }

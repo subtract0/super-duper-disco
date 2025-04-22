@@ -11,7 +11,7 @@ describe('Agent API E2E lifecycle', () => {
   it('should create an agent and immediately retrieve it by ID', async () => {
     const createRes = await api
       .post('/api/agents')
-      .send({ type: 'test', host: 'localhost', config: {} })
+      .send({ type: 'test-type', host: 'localhost', config: {} })
       .expect(201);
     expect(createRes.body.agent).toBeDefined();
     agentId = createRes.body.agent.id;

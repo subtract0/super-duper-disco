@@ -32,14 +32,20 @@ export class AgentOrchestrator {
     };
   }
 
-  stopAgent(id: string): string {
-    this.mgr.stopAgent(id);
+  /**
+   * Stop an agent by id. Async: must be awaited by callers.
+   */
+  async stopAgent(id: string): Promise<string> {
+    await this.mgr.stopAgent(id);
     return 'stopped';
   }
 
-  restartAgent(id: string): string {
-    this.mgr.stopAgent(id);
-    this.mgr.deployAgent(id, 'unknown', 'native', {});
+  /**
+   * Restart an agent by id. Async: must be awaited by callers.
+   */
+  async restartAgent(id: string): Promise<string> {
+    await this.mgr.stopAgent(id);
+    await this.mgr.deployAgent(id, 'unknown', 'native', {});
     return 'restarted';
   }
 

@@ -5,7 +5,7 @@ import { orchestrator } from '../../src/orchestration/orchestratorSingleton';
 describe('/api/agents/[id]health', () => {
   beforeAll(() => {
     // Setup: deploy a test agent
-    orchestrator.launchAgent({ id: 'test-agent', type: 'test', config: {}, status: 'running', host: 'test' });
+    orchestrator.launchAgent({ id: 'test-agent', type: 'test-type', config: {}, status: 'running', host: 'test' });
   });
 
   it('should return status for a valid agent id', async () => {

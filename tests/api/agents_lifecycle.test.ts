@@ -25,7 +25,7 @@ describe('Agent API lifecycle', () => {
 
   it('should create an agent and immediately retrieve it by ID', async () => {
     // POST /api/agents
-    const testPayload = { type: 'test', host: 'localhost', config: {} };
+    const testPayload = { type: 'test-type', host: 'localhost', config: {} };
     // Debug log: type in test payload
     // eslint-disable-next-line no-console
     console.log('[TEST][POST payload] type:', testPayload.type, 'payload:', testPayload);

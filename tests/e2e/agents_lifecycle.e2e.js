@@ -8,7 +8,7 @@ const fetch = require('node-fetch');
     let res = await fetch('http://localhost:3000/api/agents', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'test', host: 'localhost', config: {} })
+      body: JSON.stringify({ type: 'test-type', host: 'localhost', config: {} })
     });
     if (res.status !== 201) throw new Error('Failed to create agent: ' + res.status);
     const { agent } = await res.json();

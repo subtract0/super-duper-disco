@@ -2,7 +2,7 @@ import { AgentHealth } from '../orchestration/orchestrator/types';
 
 export function getHealthDisplay(health: AgentHealth) {
   const status = health.status;
-  const anomaly = '';
+  let anomaly = '';
   let color = '';
   if (status === 'crashed') {
     color = '#ffeaea';

@@ -14,12 +14,13 @@ export class FileService {
   }
 
   async download(id: string): Promise<TelegramFile> {
-    const { data: { result } } = await axios.get(this.api('getFile'), { params: { file_id: id } });
+    const { data } = await axios.get(this.api('getFile'), { params: { file_id: id } });
+const result = (data as any).result;
     const filePath = result.file_path;
 
     const resp = await axios.get(`https://api.telegram.org/file/bot${this.botToken}/${filePath}`, { responseType: 'arraybuffer' });
     return {
-      buffer: Buffer.from(resp.data),
+      buffer: Buffer.from(resp.data as any),
       name: filePath.split('/').pop() || 'file',
       mime: resp.headers['content-type'],
       size: Number(resp.headers['content-length']),
@@ -29,6 +30,6 @@ export class FileService {
   async upload(f: TelegramFile): Promise<string> {
     const { data, error } = await this.supabase.storage.from(this.bucket).upload(f.name, f.buffer, { contentType: f.mime });
     if (error) throw error;
-    return `${this.supabase.storageUrl}/${this.bucket}/${data.path}`;
+    return `${this.supabase.storageUrl ?? ''}/${this.bucket}/${data.path}`;
   }
 }
